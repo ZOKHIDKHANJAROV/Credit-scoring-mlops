@@ -1,0 +1,89 @@
+schema: '2.0'
+stages:
+  validate_data:
+    cmd: python -m src.data.validate_data
+    deps:
+    - path: data/raw/german_credit_data.csv
+      hash: md5
+      md5: 7de6cc42914570bdb5fb2b4be75acc89
+      size: 47940
+    - path: src/data/schema.py
+      hash: md5
+      md5: 266fba2f5d88c17fe8759345fb661639
+      size: 849
+    - path: src/data/validate_data.py
+      hash: md5
+      md5: 2e1e16e4f3de9e4f5ce646e3a1e33d1b
+      size: 2691
+  build_features:
+    cmd: python -m src.features.build_features
+    deps:
+    - path: data/raw/german_credit_data.csv
+      hash: md5
+      md5: 7de6cc42914570bdb5fb2b4be75acc89
+      size: 47940
+    - path: src/features/build_features.py
+      hash: md5
+      md5: f2ef7bf3a98b164df1fe74f1916addef
+      size: 2486
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: f305e7b03cff4543d3a6546243be1f36
+      size: 17102
+    - path: data/processed/train.csv
+      hash: md5
+      md5: bcbf75fb7c54e7687bb84deef66e1781
+      size: 66608
+  train_catboost:
+    cmd: python -m src.training.train_catboost
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: f305e7b03cff4543d3a6546243be1f36
+      size: 17102
+    - path: data/processed/train.csv
+      hash: md5
+      md5: bcbf75fb7c54e7687bb84deef66e1781
+      size: 66608
+    - path: src/training/train_catboost.py
+      hash: md5
+      md5: 9a7056ae6252c93b8e0ae3d81274b1a2
+      size: 3548
+  train_lightgbm:
+    cmd: python -m src.training.train_lightgbm
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: f305e7b03cff4543d3a6546243be1f36
+      size: 17102
+    - path: data/processed/train.csv
+      hash: md5
+      md5: bcbf75fb7c54e7687bb84deef66e1781
+      size: 66608
+    - path: src/training/train_lightgbm.py
+      hash: md5
+      md5: 3d6981916558f9a41d4875ea6dafad00
+      size: 2514
+  train_xgboost:
+    cmd: python -m src.training.train_xgboost
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: f305e7b03cff4543d3a6546243be1f36
+      size: 17102
+    - path: data/processed/train.csv
+      hash: md5
+      md5: bcbf75fb7c54e7687bb84deef66e1781
+      size: 66608
+    - path: src/training/train_xgboost.py
+      hash: md5
+      md5: 4a92df5ae050e92f431a241209fd612e
+      size: 2731
+  select_best_model:
+    cmd: python -m src.training.select_best_model
+    deps:
+    - path: src/training/select_best_model.py
+      hash: md5
+      md5: 7c734f01636217f482ac602af102ca4d
+      size: 2568

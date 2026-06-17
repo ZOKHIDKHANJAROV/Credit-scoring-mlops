@@ -1,0 +1,42 @@
+stages:
+  validate_data:
+    cmd: python -m src.data.validate_data
+    deps:
+      - data/raw/german_credit_data.csv
+      - src/data/validate_data.py
+      - src/data/schema.py
+
+  build_features:
+    cmd: python -m src.features.build_features
+    deps:
+      - data/raw/german_credit_data.csv
+      - src/features/build_features.py
+    outs:
+      - data/processed/train.csv
+      - data/processed/test.csv
+
+  train_catboost:
+    cmd: python -m src.training.train_catboost
+    deps:
+      - data/processed/train.csv
+      - data/processed/test.csv
+      - src/training/train_catboost.py
+
+  train_lightgbm:
+    cmd: python -m src.training.train_lightgbm
+    deps:
+      - data/processed/train.csv
+      - data/processed/test.csv
+      - src/training/train_lightgbm.py
+
+  train_xgboost:
+    cmd: python -m src.training.train_xgboost
+    deps:
+      - data/processed/train.csv
+      - data/processed/test.csv
+      - src/training/train_xgboost.py
+
+  select_best_model:
+    cmd: python -m src.training.select_best_model
+    deps:
+      - src/training/select_best_model.py
