@@ -12,3 +12,7 @@ reports/*
 
 mlruns/
 .dvc/cache/
+
+catboost_info/
+mlflow.db
+mlruns/
