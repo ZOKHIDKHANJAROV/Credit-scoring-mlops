@@ -57,6 +57,8 @@ def main() -> None:
         "objective": "binary",
         "random_state": 42,
         "class_weight": "balanced",
+        "verbose": -1,
+        "force_col_wise": True,
     }
 
     mlflow.set_experiment(EXPERIMENT_NAME)

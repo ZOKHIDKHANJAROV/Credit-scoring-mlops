@@ -17,7 +17,7 @@ def main() -> None:
 
     runs = client.search_runs(
         experiment_ids=[experiment.experiment_id],
-        filter_string="attributes.status = 'FINISHED'",
+        filter_string=f"attributes.status = 'FINISHED' and metrics.{METRIC_NAME} > 0",
         order_by=[f"metrics.{METRIC_NAME} DESC"],
     )
 
