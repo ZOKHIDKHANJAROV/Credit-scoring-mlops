@@ -4,7 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 .env
 
-data/raw/*
+#data/raw/*
 data/processed/*
 data/reference/*
 models/*
