@@ -1,0 +1,16 @@
+pandas
+numpy
+scikit-learn
+catboost
+lightgbm
+xgboost
+mlflow
+dvc
+great-expectations
+matplotlib
+seaborn
+joblib
+python-dotenv
+pytest
+jupyter
+ipykernel

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+
+data/raw/*
+data/processed/*
+data/reference/*
+models/*
+reports/*
+
+mlruns/
+.dvc/cache/
