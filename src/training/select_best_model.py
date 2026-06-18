@@ -6,6 +6,12 @@ from mlflow.tracking import MlflowClient
 EXPERIMENT_NAME = "credit-scoring"
 METRIC_NAME = "roc_auc"
 
+MODEL_RUN_NAMES = [
+    "catboost_baseline",
+    "lightgbm_baseline",
+    "xgboost_baseline",
+]
+
 
 def main() -> None:
     client = MlflowClient()
@@ -18,23 +24,27 @@ def main() -> None:
     runs = client.search_runs(
         experiment_ids=[experiment.experiment_id],
         filter_string=f"attributes.status = 'FINISHED' and metrics.{METRIC_NAME} > 0",
-        order_by=[f"metrics.{METRIC_NAME} DESC"],
+        order_by=["attributes.start_time DESC"],
     )
 
     if not runs:
-        raise ValueError("No finished runs found")
+        raise ValueError("No finished model runs found")
 
     rows = []
 
     for run in runs:
+        run_name = run.data.tags.get("mlflow.runName")
+
+        if run_name not in MODEL_RUN_NAMES:
+            continue
+
         metrics = run.data.metrics
-        params = run.data.params
 
         rows.append(
             {
                 "run_id": run.info.run_id,
-                "run_name": run.data.tags.get("mlflow.runName"),
-                "model": run.data.tags.get("mlflow.log-model.history", "")[:60],
+                "run_name": run_name,
+                "start_time": run.info.start_time,
                 "roc_auc": metrics.get("roc_auc"),
                 "gini": metrics.get("gini"),
                 "accuracy": metrics.get("accuracy"),
@@ -44,12 +54,22 @@ def main() -> None:
             }
         )
 
-    results_df = pd.DataFrame(rows)
-    results_df = results_df.sort_values(by=METRIC_NAME, ascending=False)
+    if not rows:
+        raise ValueError("No model runs found for comparison")
 
-    print("\nModel comparison:")
+    results_df = pd.DataFrame(rows)
+
+    # Берём только последний запуск каждой модели
+    latest_results_df = (
+        results_df
+        .sort_values(by="start_time", ascending=False)
+        .drop_duplicates(subset=["run_name"], keep="first")
+        .sort_values(by=METRIC_NAME, ascending=False)
+    )
+
+    print("\nLatest model comparison:")
     print(
-        results_df[
+        latest_results_df[
             [
                 "run_name",
                 "roc_auc",
@@ -62,26 +82,21 @@ def main() -> None:
         ].to_string(index=False)
     )
 
-    best_run = runs[0]
+    best_row = latest_results_df.iloc[0]
 
-    print("\nBest model:")
-    print(f"Run name: {best_run.data.tags.get('mlflow.runName')}")
-    print(f"Run ID: {best_run.info.run_id}")
-    print(f"ROC-AUC: {best_run.data.metrics.get(METRIC_NAME):.4f}")
+    print("\nBest latest model:")
+    print(f"Run name: {best_row['run_name']}")
+    print(f"Run ID: {best_row['run_id']}")
+    print(f"ROC-AUC: {best_row[METRIC_NAME]:.4f}")
 
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="best_model_selection"):
         mlflow.log_param("selection_metric", METRIC_NAME)
-        mlflow.log_param("best_run_id", best_run.info.run_id)
-        mlflow.log_param(
-            "best_run_name",
-            best_run.data.tags.get("mlflow.runName"),
-        )
-        mlflow.log_metric(
-            f"best_{METRIC_NAME}",
-            best_run.data.metrics.get(METRIC_NAME),
-        )
+        mlflow.log_param("selection_strategy", "latest_run_per_model")
+        mlflow.log_param("best_run_id", best_row["run_id"])
+        mlflow.log_param("best_run_name", best_row["run_name"])
+        mlflow.log_metric(f"best_{METRIC_NAME}", best_row[METRIC_NAME])
 
     print("\nBest model selection logged to MLflow")
 

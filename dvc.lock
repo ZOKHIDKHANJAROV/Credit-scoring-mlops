@@ -93,5 +93,5 @@ stages:
     deps:
     - path: src/training/select_best_model.py
       hash: md5
-      md5: 24737d3581e2a3d834c955faa5cc1b51
-      size: 2599
+      md5: 798e116f33e2427d2322cb9d2edb7bde
+      size: 3027
