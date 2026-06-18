@@ -42,3 +42,4 @@ stages:
     cmd: python -m src.training.select_best_model
     deps:
       - src/training/select_best_model.py
+    always_changed: true
