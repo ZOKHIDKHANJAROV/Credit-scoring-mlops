@@ -11,6 +11,8 @@ stages:
     deps:
       - data/raw/german_credit_data.csv
       - src/features/build_features.py
+      - src/utils/config.py
+      - configs/feature_config.json
     outs:
       - data/processed/train.csv
       - data/processed/test.csv

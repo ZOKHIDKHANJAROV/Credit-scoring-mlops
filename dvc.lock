@@ -18,33 +18,41 @@ stages:
   build_features:
     cmd: python -m src.features.build_features
     deps:
+    - path: configs/feature_config.json
+      hash: md5
+      md5: 9d05c1d1c88d01886a422a7ce3458fb4
+      size: 67
     - path: data/raw/german_credit_data.csv
       hash: md5
       md5: 7de6cc42914570bdb5fb2b4be75acc89
       size: 47940
     - path: src/features/build_features.py
       hash: md5
-      md5: f2ef7bf3a98b164df1fe74f1916addef
-      size: 2486
+      md5: 5041cbba1dd8be65f54fc4e94e5bb75e
+      size: 2600
+    - path: src/utils/config.py
+      hash: md5
+      md5: b6044f5ba2f71ad560bc9041b92d2235
+      size: 395
     outs:
     - path: data/processed/test.csv
       hash: md5
-      md5: f305e7b03cff4543d3a6546243be1f36
+      md5: f265c1258846eedcab5c1510d8b70049
       size: 17102
     - path: data/processed/train.csv
       hash: md5
-      md5: bcbf75fb7c54e7687bb84deef66e1781
+      md5: d832ef441714a26bb142b0c47a0cfe80
       size: 66608
   train_catboost:
     cmd: python -m src.training.train_catboost
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f305e7b03cff4543d3a6546243be1f36
+      md5: f265c1258846eedcab5c1510d8b70049
       size: 17102
     - path: data/processed/train.csv
       hash: md5
-      md5: bcbf75fb7c54e7687bb84deef66e1781
+      md5: d832ef441714a26bb142b0c47a0cfe80
       size: 66608
     - path: src/training/train_catboost.py
       hash: md5
@@ -55,11 +63,11 @@ stages:
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f305e7b03cff4543d3a6546243be1f36
+      md5: f265c1258846eedcab5c1510d8b70049
       size: 17102
     - path: data/processed/train.csv
       hash: md5
-      md5: bcbf75fb7c54e7687bb84deef66e1781
+      md5: d832ef441714a26bb142b0c47a0cfe80
       size: 66608
     - path: src/training/train_lightgbm.py
       hash: md5
@@ -70,11 +78,11 @@ stages:
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f305e7b03cff4543d3a6546243be1f36
+      md5: f265c1258846eedcab5c1510d8b70049
       size: 17102
     - path: data/processed/train.csv
       hash: md5
-      md5: bcbf75fb7c54e7687bb84deef66e1781
+      md5: d832ef441714a26bb142b0c47a0cfe80
       size: 66608
     - path: src/training/train_xgboost.py
       hash: md5

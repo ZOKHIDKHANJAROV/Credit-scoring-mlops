@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
-
+from src.utils.config import load_feature_config
 
 RAW_DATA_PATH = Path("data/raw/german_credit_data.csv")
 PROCESSED_DIR = Path("data/processed")
@@ -38,6 +38,7 @@ COLUMN_MAPPING = {
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
+    config = load_feature_config()
 
     df["credit_amount_per_month"] = (
         df["credit_amount"] / df["duration_months"]
@@ -48,11 +49,11 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     df["is_long_term_loan"] = (
-        df["duration_months"] >= 36
+        df["duration_months"] >= config["long_term_threshold"]
     ).astype(int)
 
     df["is_high_amount_loan"] = (
-        df["credit_amount"] >= df["credit_amount"].median()
+        df["credit_amount"] >= config["high_amount_threshold"]
     ).astype(int)
 
     return df

@@ -1,10 +1,11 @@
 import pandas as pd
 
 from services.api.schemas import CreditApplication
-
+from src.utils.config import load_feature_config
 
 def build_features(application: CreditApplication) -> pd.DataFrame:
     data = application.model_dump()
+    config = load_feature_config()
 
     df = pd.DataFrame([data])
 
@@ -17,11 +18,11 @@ def build_features(application: CreditApplication) -> pd.DataFrame:
     )
 
     df["is_long_term_loan"] = (
-        df["duration_months"] >= 36
+        df["duration_months"] >= config["long_term_threshold"]
     ).astype(int)
 
     df["is_high_amount_loan"] = (
-        df["credit_amount"] >= 2500
+        df["credit_amount"] >= config["high_amount_threshold"]
     ).astype(int)
 
     return df
