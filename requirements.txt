@@ -17,3 +17,4 @@ ipykernel
 fastapi
 uvicorn
 pydantic
+boto3

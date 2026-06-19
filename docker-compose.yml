@@ -58,7 +58,25 @@ services:
       --default-artifact-root s3://mlflow/
       --host 0.0.0.0
       --port 5000
+      --allowed-hosts 'localhost:*,127.0.0.1:*,mlflow:5000,credit_scoring_mlflow:5000'
+      --cors-allowed-origins 'http://localhost:*,http://127.0.0.1:*'
       "
+      
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: credit_scoring_api
+    depends_on:
+      - mlflow
+      - minio
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+    ports:
+      - "8000:8000"
 
 volumes:
   postgres_data:
