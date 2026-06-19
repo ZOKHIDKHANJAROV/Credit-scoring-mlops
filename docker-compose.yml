@@ -70,11 +70,13 @@ services:
     depends_on:
       - mlflow
       - minio
+      - postgres
     environment:
       MLFLOW_TRACKING_URI: http://mlflow:5000
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
+      DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
     ports:
       - "8000:8000"
 
