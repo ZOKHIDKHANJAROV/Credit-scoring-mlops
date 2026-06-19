@@ -95,3 +95,10 @@ stages:
       hash: md5
       md5: 798e116f33e2427d2322cb9d2edb7bde
       size: 3027
+  promote_model:
+    cmd: python -m src.training.promote_model
+    deps:
+    - path: src/training/promote_model.py
+      hash: md5
+      md5: ea1cb522500a09e99309ea39498c6cb0
+      size: 1852

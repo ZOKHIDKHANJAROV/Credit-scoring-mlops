@@ -43,3 +43,9 @@ stages:
     deps:
       - src/training/select_best_model.py
     always_changed: true
+    
+  promote_model:
+    cmd: python -m src.training.promote_model
+    deps:
+      - src/training/promote_model.py
+    always_changed: true

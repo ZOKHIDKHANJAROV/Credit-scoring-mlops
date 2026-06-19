@@ -3,12 +3,15 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .env
+.git/
+.dvc/cache/
 
 #data/raw/*
 data/processed/*
 data/reference/*
 models/*
 reports/*
+notebooks/
 
 mlruns/
 .dvc/cache/
