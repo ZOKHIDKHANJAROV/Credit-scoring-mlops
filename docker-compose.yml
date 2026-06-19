@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: credit_scoring_postgres
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: credit_scoring_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  create-minio-bucket:
+    image: minio/mc:latest
+    container_name: credit_scoring_create_bucket
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 minio minio123;
+      mc mb -p local/mlflow;
+      exit 0;
+      "
+
+  mlflow:
+    image: python:3.11-slim
+    container_name: credit_scoring_mlflow
+    depends_on:
+      - postgres
+      - minio
+      - create-minio-bucket
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+    ports:
+      - "5000:5000"
+    command: >
+      /bin/sh -c "
+      pip install mlflow boto3 psycopg2-binary &&
+      mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow@postgres:5432/mlflow
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0
+      --port 5000
+      "
+
+volumes:
+  postgres_data:
+  minio_data:

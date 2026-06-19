@@ -4,6 +4,7 @@ import mlflow
 import mlflow.xgboost
 import pandas as pd
 import xgboost as xgb
+from dotenv import load_dotenv
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -12,6 +13,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+load_dotenv()
 
 TRAIN_PATH = Path("data/processed/train.csv")
 TEST_PATH = Path("data/processed/test.csv")
@@ -64,7 +66,7 @@ def main() -> None:
         "random_state": 42,
         "scale_pos_weight": scale_pos_weight,
     }
-
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="xgboost_baseline"):

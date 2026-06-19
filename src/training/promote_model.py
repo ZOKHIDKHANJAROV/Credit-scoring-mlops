@@ -1,6 +1,8 @@
 import mlflow
 from mlflow.tracking import MlflowClient
+from dotenv import load_dotenv
 
+load_dotenv()
 
 EXPERIMENT_NAME = "credit-scoring"
 METRIC_NAME = "roc_auc"

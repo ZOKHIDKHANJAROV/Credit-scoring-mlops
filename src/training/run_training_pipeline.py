@@ -1,6 +1,8 @@
 import subprocess
 import sys
+from dotenv import load_dotenv
 
+load_dotenv()
 
 COMMANDS = [
     ("Validate raw data", "python -m src.data.validate_data"),

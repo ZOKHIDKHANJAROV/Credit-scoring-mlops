@@ -4,6 +4,7 @@ import mlflow
 import mlflow.catboost
 import pandas as pd
 from catboost import CatBoostClassifier
+from dotenv import load_dotenv
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -11,6 +12,8 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+
+load_dotenv()
 
 
 TRAIN_PATH = Path("data/processed/train.csv")
@@ -93,7 +96,7 @@ def main() -> None:
         "verbose": False,
         "class_weights": [1.0, 2.0],
     }
-
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="catboost_baseline"):

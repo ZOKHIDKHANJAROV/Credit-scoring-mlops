@@ -4,6 +4,7 @@ import lightgbm as lgb
 import mlflow
 import mlflow.lightgbm
 import pandas as pd
+from dotenv import load_dotenv
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -12,6 +13,7 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
+load_dotenv()
 
 TRAIN_PATH = Path("data/processed/train.csv")
 TEST_PATH = Path("data/processed/test.csv")
@@ -60,7 +62,7 @@ def main() -> None:
         "verbose": -1,
         "force_col_wise": True,
     }
-
+    mlflow.set_tracking_uri("http://127.0.0.1:5000")
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="lightgbm_baseline"):
