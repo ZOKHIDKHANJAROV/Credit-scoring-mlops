@@ -1,8 +1,11 @@
 import os
 
+from dotenv import load_dotenv
 import mlflow
 import mlflow.catboost
 
+
+load_dotenv()
 
 MODEL_NAME = "CreditScoringCatBoost"
 MODEL_ALIAS = "champion"
