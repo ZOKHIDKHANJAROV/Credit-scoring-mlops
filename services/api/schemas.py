@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-
+from datetime import datetime
 
 class CreditApplication(BaseModel):
     checking_account_status: int = Field(..., ge=1, le=4)
@@ -30,3 +30,18 @@ class ScoringResponse(BaseModel):
     risk_level: str
     decision: str
     model_name: str
+
+class ScoringLogResponse(BaseModel):
+    id: int
+    age: int
+    duration_months: int
+    credit_amount: float
+    default_probability: float
+    score: int
+    risk_level: str
+    decision: str
+    model_name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

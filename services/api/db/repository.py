@@ -27,3 +27,11 @@ def save_scoring_log(
     db.refresh(scoring_log)
 
     return scoring_log
+
+def get_latest_scoring_logs(db, limit: int = 10):
+    return (
+        db.query(ScoringLog)
+        .order_by(ScoringLog.created_at.desc())
+        .limit(limit)
+        .all()
+    )

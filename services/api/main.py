@@ -2,16 +2,16 @@ from fastapi import FastAPI
 
 from services.api.db.database import SessionLocal, engine
 from services.api.db.models import Base
-from services.api.db.repository import save_scoring_log
+from services.api.db.repository import save_scoring_log, get_latest_scoring_logs
 from services.api.model_loader import MODEL_NAME, model
-from services.api.schemas import CreditApplication, ScoringResponse
+from services.api.schemas import CreditApplication, ScoringResponse, ScoringLogResponse
 from services.api.scoring import (
     build_features,
     get_decision,
     get_risk_level,
     probability_to_score,
 )
-
+from typing import List
 
 app = FastAPI(
     title="Credit Scoring API",
@@ -59,3 +59,11 @@ def score_application(application: CreditApplication) -> ScoringResponse:
         decision=decision,
         model_name=MODEL_NAME,
     )
+
+@app.get("/scoring-logs", response_model=List[ScoringLogResponse])
+def scoring_logs(limit: int = 10):
+    db = SessionLocal()
+    try:
+        return get_latest_scoring_logs(db=db, limit=limit)
+    finally:
+        db.close()
