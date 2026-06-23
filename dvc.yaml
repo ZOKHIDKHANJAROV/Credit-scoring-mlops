@@ -49,3 +49,12 @@ stages:
     deps:
       - src/training/promote_model.py
     always_changed: true
+
+  drift_report:
+    cmd: python -m src.monitoring.drift_report
+    deps:
+      - src/monitoring/drift_report.py
+      - data/processed/train.csv
+    outs:
+      - reports/data_drift_report.html
+    always_changed: true
