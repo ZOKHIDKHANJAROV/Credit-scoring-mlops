@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import json
 import pandas as pd
 from evidently import Report
 from evidently.presets import DataDriftPreset
@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL
 TRAIN_PATH = Path("data/processed/train.csv")
 REPORTS_DIR = Path("reports")
 REPORT_PATH = REPORTS_DIR / "data_drift_report.html"
-
+RETRAIN_SIGNAL_PATH = REPORTS_DIR / "retrain_signal.json"
 
 FEATURE_COLUMNS = [
     "age",
@@ -75,6 +75,36 @@ def load_current_data() -> pd.DataFrame:
 
     return current_df[FEATURE_COLUMNS].copy()
 
+def save_retrain_signal(snapshot) -> None:
+    report_dict = snapshot.dict()
+
+    metrics = report_dict.get("metrics", [])
+
+    drift_detected = False
+    drifted_features = []
+
+    for metric in metrics:
+        result = metric.get("result", {})
+
+        if "dataset_drift" in result:
+            drift_detected = bool(result["dataset_drift"])
+
+        if "drift_by_columns" in result:
+            for column_name, column_info in result["drift_by_columns"].items():
+                if column_info.get("drift_detected") is True:
+                    drifted_features.append(column_name)
+
+    signal = {
+        "retrain_required": drift_detected,
+        "reason": "Data drift detected" if drift_detected else "No data drift detected",
+        "drifted_features": drifted_features,
+    }
+
+    with open(RETRAIN_SIGNAL_PATH, "w", encoding="utf-8") as file:
+        json.dump(signal, file, indent=2, ensure_ascii=False)
+
+    print(f"Retrain signal path: {RETRAIN_SIGNAL_PATH}")
+    print(f"Retrain required: {signal['retrain_required']}")
 
 def main() -> None:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -92,7 +122,8 @@ def main() -> None:
     )
 
     snapshot.save_html(str(REPORT_PATH))
-
+    save_retrain_signal(snapshot)
+    
     print("Data drift report generated")
     print(f"Reference shape: {reference_data.shape}")
     print(f"Current shape: {current_data.shape}")

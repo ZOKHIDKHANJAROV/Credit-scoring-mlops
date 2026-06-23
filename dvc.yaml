@@ -57,4 +57,5 @@ stages:
       - data/processed/train.csv
     outs:
       - reports/data_drift_report.html
+      - reports/retrain_signal.json
     always_changed: true

@@ -111,10 +111,14 @@ stages:
       size: 66608
     - path: src/monitoring/drift_report.py
       hash: md5
-      md5: 7c15e9b1cc0f549418cc2f0520b430de
-      size: 2937
+      md5: 80e55ba163668396de1cd6ffc750b3c2
+      size: 4057
     outs:
     - path: reports/data_drift_report.html
       hash: md5
-      md5: 6c212909c2186fd0c368493da71bef7a
+      md5: f0f1e6faada026ac433f664862a938c9
       size: 3737294
+    - path: reports/retrain_signal.json
+      hash: md5
+      md5: 77fcc041638b6a2c1406b91e808c9cfd
+      size: 99
