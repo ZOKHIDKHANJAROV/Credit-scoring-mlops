@@ -1,0 +1,27 @@
+artifact_path: file:D:/credit-scoring-mlops/mlruns/1/models/m-85999ed0635d4b2684bb009e3baa7b52/artifacts
+flavors:
+  lightgbm:
+    code: null
+    data: model.skops
+    lgb_version: 4.6.0
+    model_class: lightgbm.sklearn.LGBMClassifier
+    serialization_format: skops
+    skops_trusted_types:
+    - lightgbm.sklearn.LGBMClassifier
+    - lightgbm.basic.Booster
+    - collections.OrderedDict
+    - lightgbm.sklearn.LGBMRegressor
+  python_function:
+    data: model.skops
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.lightgbm
+    python_version: 3.13.9
+mlflow_version: 3.14.0
+model_id: m-85999ed0635d4b2684bb009e3baa7b52
+model_size_bytes: 758458
+model_uuid: m-85999ed0635d4b2684bb009e3baa7b52
+prompts: null
+run_id: d005668eaee6404b963d2e4b83fa688a
+utc_time_created: '2026-06-17 11:17:46.221233'

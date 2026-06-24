@@ -1,0 +1,22 @@
+artifact_path: file:D:/credit-scoring-mlops/mlruns/1/models/m-0650c6bc93994e21ad554f5ec03963a7/artifacts
+flavors:
+  catboost:
+    catboost_version: 1.2.10
+    code: null
+    data: model.cb
+    model_type: CatBoostClassifier
+    save_format: cbm
+  python_function:
+    data: model.cb
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.catboost
+    python_version: 3.13.9
+mlflow_version: 3.14.0
+model_id: m-0650c6bc93994e21ad554f5ec03963a7
+model_size_bytes: 139636
+model_uuid: m-0650c6bc93994e21ad554f5ec03963a7
+prompts: null
+run_id: f6eca0dfec8e46b9b38f341cb819b40b
+utc_time_created: '2026-06-17 11:24:50.323347'

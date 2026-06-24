@@ -1,0 +1,5 @@
+{
+  "retrain_required": false,
+  "reason": "No data drift detected",
+  "drifted_features": []
+}

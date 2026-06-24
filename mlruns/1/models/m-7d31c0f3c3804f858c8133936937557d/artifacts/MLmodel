@@ -1,0 +1,22 @@
+artifact_path: file:D:/credit-scoring-mlops/mlruns/1/models/m-7d31c0f3c3804f858c8133936937557d/artifacts
+flavors:
+  python_function:
+    data: model.ubj
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.13.9
+  xgboost:
+    code: null
+    data: model.ubj
+    model_class: xgboost.sklearn.XGBClassifier
+    model_format: ubj
+    xgb_version: 3.2.0
+mlflow_version: 3.14.0
+model_id: m-7d31c0f3c3804f858c8133936937557d
+model_size_bytes: 450188
+model_uuid: m-7d31c0f3c3804f858c8133936937557d
+prompts: null
+run_id: 2f3f673970894c3b80806ec6b41623c9
+utc_time_created: '2026-06-17 10:57:09.659863'
