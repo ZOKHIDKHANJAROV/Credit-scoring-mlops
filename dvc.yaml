@@ -59,3 +59,13 @@ stages:
       - reports/data_drift_report.html
       - reports/retrain_signal.json
     always_changed: true
+
+  shap_report:
+    cmd: python -m src.explainability.shap_report
+    deps:
+      - src/explainability/shap_report.py
+      - data/processed/test.csv
+    outs:
+      - reports/shap_summary.html
+      - reports/shap_summary.png
+    always_changed: true

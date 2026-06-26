@@ -5,8 +5,8 @@ stages:
     deps:
     - path: data/raw/german_credit_data.csv
       hash: md5
-      md5: 7de6cc42914570bdb5fb2b4be75acc89
-      size: 47940
+      md5: a38094a9196ce22a3eba85817450f0d8
+      size: 47928
     - path: src/data/schema.py
       hash: md5
       md5: 266fba2f5d88c17fe8759345fb661639
@@ -24,8 +24,8 @@ stages:
       size: 67
     - path: data/raw/german_credit_data.csv
       hash: md5
-      md5: 7de6cc42914570bdb5fb2b4be75acc89
-      size: 47940
+      md5: a38094a9196ce22a3eba85817450f0d8
+      size: 47928
     - path: src/features/build_features.py
       hash: md5
       md5: 5041cbba1dd8be65f54fc4e94e5bb75e
@@ -37,23 +37,23 @@ stages:
     outs:
     - path: data/processed/test.csv
       hash: md5
-      md5: f265c1258846eedcab5c1510d8b70049
-      size: 17102
+      md5: 25adea382011a77a1ff5fef404c919af
+      size: 16992
     - path: data/processed/train.csv
       hash: md5
-      md5: d832ef441714a26bb142b0c47a0cfe80
-      size: 66608
+      md5: c57765fd0adc0e8791333a8b4c13aaf2
+      size: 66717
   train_catboost:
     cmd: python -m src.training.train_catboost
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f265c1258846eedcab5c1510d8b70049
-      size: 17102
+      md5: 25adea382011a77a1ff5fef404c919af
+      size: 16992
     - path: data/processed/train.csv
       hash: md5
-      md5: d832ef441714a26bb142b0c47a0cfe80
-      size: 66608
+      md5: c57765fd0adc0e8791333a8b4c13aaf2
+      size: 66717
     - path: src/training/train_catboost.py
       hash: md5
       md5: b977079e7a2962465fa5591712c37a33
@@ -63,12 +63,12 @@ stages:
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f265c1258846eedcab5c1510d8b70049
-      size: 17102
+      md5: 25adea382011a77a1ff5fef404c919af
+      size: 16992
     - path: data/processed/train.csv
       hash: md5
-      md5: d832ef441714a26bb142b0c47a0cfe80
-      size: 66608
+      md5: c57765fd0adc0e8791333a8b4c13aaf2
+      size: 66717
     - path: src/training/train_lightgbm.py
       hash: md5
       md5: 3a070fdb4edf8cf5e1e559c5b94c9308
@@ -78,12 +78,12 @@ stages:
     deps:
     - path: data/processed/test.csv
       hash: md5
-      md5: f265c1258846eedcab5c1510d8b70049
-      size: 17102
+      md5: 25adea382011a77a1ff5fef404c919af
+      size: 16992
     - path: data/processed/train.csv
       hash: md5
-      md5: d832ef441714a26bb142b0c47a0cfe80
-      size: 66608
+      md5: c57765fd0adc0e8791333a8b4c13aaf2
+      size: 66717
     - path: src/training/train_xgboost.py
       hash: md5
       md5: 1d10b0e86e03c2a0d7e290c001f4beb2
@@ -122,3 +122,23 @@ stages:
       hash: md5
       md5: 77fcc041638b6a2c1406b91e808c9cfd
       size: 99
+  shap_report:
+    cmd: python -m src.explainability.shap_report
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 25adea382011a77a1ff5fef404c919af
+      size: 16992
+    - path: src/explainability/shap_report.py
+      hash: md5
+      md5: 33e8a05553149abb74bfc95862385a2e
+      size: 2676
+    outs:
+    - path: reports/shap_summary.html
+      hash: md5
+      md5: 5bd64c1bc57ca86dbaf2faf3914c8885
+      size: 339
+    - path: reports/shap_summary.png
+      hash: md5
+      md5: 0674f3fe43f08be670b96ba0501d25ef
+      size: 86785
