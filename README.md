@@ -131,6 +131,11 @@ Workflow file:
 .github/workflows/ci.yml
 Project Status
 
+## Model Explainability
+
+The project includes SHAP-based explainability for the champion model.
+SHAP summary report shows which features have the strongest impact on credit default prediction.
+
 Completed:
 
 DVC pipeline
@@ -143,6 +148,7 @@ PostgreSQL scoring logs
 Evidently monitoring
 retrain signal
 pytest tests
+SHAP explainability
 GitHub Actions CI
 
 Next possible improvements:
@@ -153,12 +159,10 @@ Feast feature store
 model explainability with SHAP
 dashboard for monitoring
 
-Потом:
-
-```bash
-git status
-git add README.md
-git commit -m "Add project README"
-git push
-
-После этого GitHub репозиторий уже будет выглядеть как нормальный ML Engineer portfolio project.
+Run:
+git clone
+python -m venv .venv
+pip install -r requirements.txt
+docker compose up -d --build
+python scripts/restore_german_credit_data.py
+dvc repro -f
