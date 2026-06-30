@@ -120,6 +120,7 @@ services:
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
       DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MONITORING_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@postgres:5432/mlflow
     volumes:
       - ./:/opt/airflow/project
       - ./dags:/opt/airflow/dags
@@ -154,6 +155,7 @@ services:
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
       DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MONITORING_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@postgres:5432/mlflow
     ports:
       - "8080:8080"
     volumes:
@@ -183,6 +185,7 @@ services:
       AWS_ACCESS_KEY_ID: minio
       AWS_SECRET_ACCESS_KEY: minio123
       DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+      MONITORING_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@postgres:5432/mlflow
     volumes:
       - ./:/opt/airflow/project
       - ./dags:/opt/airflow/dags

@@ -1,11 +1,13 @@
 from pathlib import Path
 import json
+import os
+
 import pandas as pd
 from evidently import Report
 from evidently.presets import DataDriftPreset
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
 TRAIN_PATH = Path("data/processed/train.csv")
 REPORTS_DIR = Path("reports")
@@ -20,6 +22,11 @@ FEATURE_COLUMNS = [
 
 
 def build_database_url() -> URL:
+    monitoring_database_url = os.getenv("MONITORING_DATABASE_URL")
+
+    if monitoring_database_url:
+        return make_url(monitoring_database_url)
+
     return URL.create(
         drivername="postgresql+pg8000",
         username="mlflow",
@@ -32,7 +39,9 @@ def build_database_url() -> URL:
 
 def print_database_diagnostics() -> None:
     database_url = build_database_url()
+    safe_url = database_url.render_as_string(hide_password=True)
     print("Database connection diagnostics:")
+    print(f"  url: {safe_url}")
     print(f"  driver: {database_url.drivername}")
     print(f"  host: {database_url.host}")
     print(f"  port: {database_url.port}")

@@ -28,12 +28,23 @@ with DAG(
 
     drift_report = BashOperator(
         task_id="drift_report",
-        bash_command=f"cd {PROJECT_DIR} && python -m src.monitoring.drift_report",
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "MONITORING_DATABASE_URL='postgresql+pg8000://mlflow:mlflow@postgres:5432/mlflow' "
+            "python -m src.monitoring.drift_report"
+        ),
     )
 
     shap_report = BashOperator(
         task_id="shap_report",
-        bash_command=f"cd {PROJECT_DIR} && python -m src.explainability.shap_report",
+        bash_command=(
+            f"cd {PROJECT_DIR} && "
+            "MLFLOW_TRACKING_URI='http://mlflow:5000' "
+            "MLFLOW_S3_ENDPOINT_URL='http://minio:9000' "
+            "AWS_ACCESS_KEY_ID='minio' "
+            "AWS_SECRET_ACCESS_KEY='minio123' "
+            "python -m src.explainability.shap_report"
+        ),
     )
 
     validate_data >> build_features >> drift_report >> shap_report
