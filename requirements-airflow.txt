@@ -1,0 +1,13 @@
+pandas
+numpy
+mlflow
+catboost
+boto3
+sqlalchemy
+pg8000
+psycopg2-binary
+evidently
+shap
+matplotlib
+python-dotenv
+requests

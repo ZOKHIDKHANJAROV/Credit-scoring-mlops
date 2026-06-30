@@ -105,6 +105,93 @@ services:
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
 
+  airflow-init:
+    image: apache/airflow:2.10.4-python3.11
+    container_name: credit_scoring_airflow_init
+    depends_on:
+      - postgres
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: credit-scoring-secret
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+    volumes:
+      - ./:/opt/airflow/project
+      - ./dags:/opt/airflow/dags
+    command: >
+      bash -c "
+      pip install -r /opt/airflow/project/requirements-airflow.txt &&
+      airflow db upgrade &&
+      airflow users create
+      --username admin
+      --password admin
+      --firstname Admin
+      --lastname User
+      --role Admin
+      --email admin@example.com
+      "
+
+  airflow-webserver:
+    image: apache/airflow:2.10.4-python3.11
+    container_name: credit_scoring_airflow_webserver
+    depends_on:
+      - airflow-init
+      - postgres
+      - mlflow
+      - minio
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: credit-scoring-secret
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./:/opt/airflow/project
+      - ./dags:/opt/airflow/dags
+    command: >
+      bash -c "
+      pip install -r /opt/airflow/project/requirements-airflow.txt &&
+      airflow webserver
+      "
+
+  airflow-scheduler:
+    image: apache/airflow:2.10.4-python3.11
+    container_name: credit_scoring_airflow_scheduler
+    depends_on:
+      - airflow-init
+      - postgres
+      - mlflow
+      - minio
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__SECRET_KEY: credit-scoring-secret
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+    volumes:
+      - ./:/opt/airflow/project
+      - ./dags:/opt/airflow/dags
+    command: >
+      bash -c "
+      pip install -r /opt/airflow/project/requirements-airflow.txt &&
+      airflow scheduler
+      "
+
 volumes:
   postgres_data:
   minio_data:
