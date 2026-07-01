@@ -150,14 +150,16 @@ retrain signal
 pytest tests
 SHAP explainability
 GitHub Actions CI
+Prometheus + Grafana
+Airflow batch pipeline
+How to run on new PC
+Project architecture
 
 Next possible improvements:
 
-Airflow batch pipeline
 Kafka real-time scoring
 Feast feature store
 model explainability with SHAP
-dashboard for monitoring
 
 Run:
 git clone
