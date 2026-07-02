@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1
+
+COPY requirements-kafka.txt .
+
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --default-timeout=300 --retries=10 -r requirements-kafka.txt
+
+COPY src ./src
+COPY services ./services
+COPY configs ./configs
+
+CMD ["python", "-u", "-m", "services.kafka_consumer.scoring_consumer"]

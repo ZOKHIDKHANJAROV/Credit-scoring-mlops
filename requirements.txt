@@ -25,3 +25,4 @@ evidently
 shap
 prometheus-client
 requests
+confluent-kafka

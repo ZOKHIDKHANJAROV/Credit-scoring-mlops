@@ -195,6 +195,62 @@ services:
       airflow scheduler
       "
 
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: credit_scoring_redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - "512M"
+      - --reserve-memory
+      - "0M"
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://127.0.0.1:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: credit_scoring_kafka_ui
+    depends_on:
+      - redpanda
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: credit-scoring-redpanda
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: redpanda:9092
+
+  kafka-consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.kafka
+    container_name: credit_scoring_kafka_consumer
+    depends_on:
+      - redpanda
+      - mlflow
+      - minio
+      - postgres
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_INPUT_TOPIC: credit_applications
+      KAFKA_OUTPUT_TOPIC: scoring_results
+      KAFKA_CONSUMER_GROUP: credit-scoring-consumer
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: minio123
+      DATABASE_URL: postgresql+psycopg2://mlflow:mlflow@postgres:5432/mlflow
+
 volumes:
   postgres_data:
   minio_data:

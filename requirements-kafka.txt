@@ -1,0 +1,13 @@
+pandas
+pydantic
+python-dotenv
+
+sqlalchemy
+psycopg2-binary
+
+protobuf==4.25.8
+mlflow
+boto3
+catboost
+
+confluent-kafka
