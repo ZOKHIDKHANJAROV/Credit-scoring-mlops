@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import lightgbm as lgb
 import mlflow
@@ -62,7 +63,7 @@ def main() -> None:
         "verbose": -1,
         "force_col_wise": True,
     }
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="lightgbm_baseline"):

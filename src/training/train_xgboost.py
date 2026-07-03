@@ -1,4 +1,5 @@
 from pathlib import Path
+import os
 
 import mlflow
 import mlflow.xgboost
@@ -66,7 +67,7 @@ def main() -> None:
         "random_state": 42,
         "scale_pos_weight": scale_pos_weight,
     }
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="xgboost_baseline"):
@@ -88,7 +89,7 @@ def main() -> None:
         mlflow.log_metrics(metrics)
 
         mlflow.xgboost.log_model(
-            xgb_model=model,
+            xgb_model=model.get_booster(),
             artifact_path="model",
             registered_model_name="CreditScoringXGBoost",
         )

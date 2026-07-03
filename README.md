@@ -162,9 +162,38 @@ Feast feature store
 model explainability with SHAP
 
 Run:
-git clone
-python -m venv .venv
-pip install -r requirements.txt
+git clone ...
 docker compose up -d --build
-python scripts/restore_german_credit_data.py
-dvc repro -f
+python -m scripts.restore_german_credit_data
+dvc repro
+
+
+Project overview
+Architecture
+Tech stack
+How to run infrastructure
+How to run API
+How to run DVC training pipeline
+How to use Kafka real-time scoring
+How to use Airflow DAGs
+How to open MLflow / Grafana / Prometheus / Kafka UI
+API example with top_reasons
+Monitoring screenshots explanation
+Project structure
+Resume bullet
+
+Raw data
+  ↓
+DVC pipeline
+  ↓
+Training: CatBoost / LightGBM / XGBoost
+  ↓
+MLflow Registry
+  ↓
+FastAPI / Kafka Consumer
+  ↓
+PostgreSQL scoring_logs
+  ↓
+Prometheus + Grafana
+  ↓
+Airflow monitoring / retraining

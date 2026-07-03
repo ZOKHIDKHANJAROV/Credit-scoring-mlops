@@ -1,3 +1,5 @@
+import os
+
 import mlflow
 import pandas as pd
 from mlflow.tracking import MlflowClient
@@ -90,7 +92,7 @@ def main() -> None:
     print(f"Run name: {best_row['run_name']}")
     print(f"Run ID: {best_row['run_id']}")
     print(f"ROC-AUC: {best_row[METRIC_NAME]:.4f}")
-    mlflow.set_tracking_uri("http://127.0.0.1:5000")
+    mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
     mlflow.set_experiment(EXPERIMENT_NAME)
 
     with mlflow.start_run(run_name="best_model_selection"):
