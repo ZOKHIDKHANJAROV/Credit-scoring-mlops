@@ -37,3 +37,8 @@ SCORING_REQUEST_LATENCY_SECONDS = Histogram(
     "credit_scoring_request_latency_seconds",
     "Credit scoring request latency in seconds",
 )
+
+RETRAIN_REQUIRED = Gauge(
+    "credit_scoring_retrain_required",
+    "Whether model retraining is required based on drift report. 1 means required, 0 means not required.",
+)

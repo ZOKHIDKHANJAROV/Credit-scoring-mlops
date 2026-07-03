@@ -16,6 +16,7 @@ from services.api.metrics import (
     SCORING_REQUEST_LATENCY_SECONDS,
     SCORING_REQUESTS_TOTAL,
     SCORING_RISK_LEVEL_TOTAL,
+    RETRAIN_REQUIRED,
 )
 from services.api.model_loader import MODEL_NAME, model
 from services.api.schemas import CreditApplication, ScoringResponse, ScoringLogResponse
@@ -26,6 +27,8 @@ from services.api.scoring import (
     probability_to_score,
 )
 from services.api.explainability import get_top_reasons
+import json
+from pathlib import Path
 
 app = FastAPI(
     title="Credit Scoring API",
@@ -33,8 +36,23 @@ app = FastAPI(
     version="0.1.0",
 )
 
+RETRAIN_SIGNAL_PATH = Path("reports/retrain_signal.json")
 Base.metadata.create_all(bind=engine)
 
+def update_retrain_required_metric() -> None:
+    if not RETRAIN_SIGNAL_PATH.exists():
+        RETRAIN_REQUIRED.set(0)
+        return
+
+    try:
+        with open(RETRAIN_SIGNAL_PATH, "r", encoding="utf-8") as file:
+            signal = json.load(file)
+
+        retrain_required = bool(signal.get("retrain_required", False))
+        RETRAIN_REQUIRED.set(1 if retrain_required else 0)
+
+    except Exception:
+        RETRAIN_REQUIRED.set(0)
 
 @app.get("/health")
 def health_check() -> dict[str, str]:
@@ -108,6 +126,8 @@ def scoring_logs(limit: int = 10):
 
 @app.get("/metrics")
 def metrics():
+    update_retrain_required_metric()
+    
     return Response(
         content=generate_latest(),
         media_type=CONTENT_TYPE_LATEST,
