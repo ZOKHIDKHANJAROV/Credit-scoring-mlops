@@ -23,6 +23,11 @@ class CreditApplication(BaseModel):
     telephone: int = Field(..., ge=1, le=2)
     foreign_worker: int = Field(..., ge=1, le=2)
 
+class ExplanationReason(BaseModel):
+    feature: str
+    value: float
+    shap_value: float
+    impact: str
 
 class ScoringResponse(BaseModel):
     default_probability: float
@@ -30,6 +35,7 @@ class ScoringResponse(BaseModel):
     risk_level: str
     decision: str
     model_name: str
+    top_reasons: list[ExplanationReason]
 
 class ScoringLogResponse(BaseModel):
     id: int

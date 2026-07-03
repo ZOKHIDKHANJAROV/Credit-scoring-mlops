@@ -25,7 +25,7 @@ from services.api.scoring import (
     get_risk_level,
     probability_to_score,
 )
-
+from services.api.explainability import get_top_reasons
 
 app = FastAPI(
     title="Credit Scoring API",
@@ -55,6 +55,7 @@ def score_application(application: CreditApplication) -> ScoringResponse:
         features = build_features(application)
 
         default_probability = float(model.predict_proba(features)[:, 1][0])
+        top_reasons = get_top_reasons(model=model, features=features, top_n=3)
 
         score = probability_to_score(default_probability)
         risk_level = get_risk_level(default_probability)
@@ -81,6 +82,7 @@ def score_application(application: CreditApplication) -> ScoringResponse:
             risk_level=risk_level,
             decision=decision,
             model_name=MODEL_NAME,
+            top_reasons=top_reasons,
         )
 
     except Exception:
