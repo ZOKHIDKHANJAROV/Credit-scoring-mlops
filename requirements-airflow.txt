@@ -2,6 +2,8 @@ pandas
 numpy
 mlflow
 catboost
+lightgbm
+xgboost==1.7.6
 boto3
 sqlalchemy
 pg8000

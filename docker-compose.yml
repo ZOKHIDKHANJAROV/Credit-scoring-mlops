@@ -106,7 +106,9 @@ services:
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
 
   airflow-init:
-    image: apache/airflow:2.10.4-python3.11
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     container_name: credit_scoring_airflow_init
     depends_on:
       - postgres
@@ -126,7 +128,6 @@ services:
       - ./dags:/opt/airflow/dags
     command: >
       bash -c "
-      pip install -r /opt/airflow/project/requirements-airflow.txt &&
       airflow db upgrade &&
       airflow users create
       --username admin
@@ -134,11 +135,13 @@ services:
       --firstname Admin
       --lastname User
       --role Admin
-      --email admin@example.com
+      --email admin@example.com || true
       "
 
   airflow-webserver:
-    image: apache/airflow:2.10.4-python3.11
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     container_name: credit_scoring_airflow_webserver
     depends_on:
       - airflow-init
@@ -161,14 +164,12 @@ services:
     volumes:
       - ./:/opt/airflow/project
       - ./dags:/opt/airflow/dags
-    command: >
-      bash -c "
-      pip install -r /opt/airflow/project/requirements-airflow.txt &&
-      airflow webserver
-      "
+    command: airflow webserver
 
   airflow-scheduler:
-    image: apache/airflow:2.10.4-python3.11
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
     container_name: credit_scoring_airflow_scheduler
     depends_on:
       - airflow-init
@@ -189,11 +190,7 @@ services:
     volumes:
       - ./:/opt/airflow/project
       - ./dags:/opt/airflow/dags
-    command: >
-      bash -c "
-      pip install -r /opt/airflow/project/requirements-airflow.txt &&
-      airflow scheduler
-      "
+    command: airflow scheduler
 
   redpanda:
     image: redpandadata/redpanda:latest
