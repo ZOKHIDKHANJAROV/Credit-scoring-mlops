@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-engineering-agent-readonly
+  namespace: ai-engineering
+subjects:
+  - kind: ServiceAccount
+    name: ai-engineering-agent
+    namespace: ai-engineering
+roleRef:
+  kind: Role
+  name: ai-engineering-agent-readonly
+  apiGroup: rbac.authorization.k8s.io
