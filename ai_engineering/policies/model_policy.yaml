@@ -1,0 +1,11 @@
+model_promotion:
+  min_roc_auc: 0.80
+  min_recall: 0.60
+  min_precision: 0.50
+  min_roc_auc_improvement: 0.0
+  require_human_approval: true
+  require_all_quality_gates: true
+
+execution:
+  allowed_kubernetes_action: create_training_job
+  allow_cluster_admin: false
