@@ -1,0 +1,206 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy after publishing images"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+env:
+  REGISTRY: ghcr.io
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  quality:
+    name: Tests and static validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install CI dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-ci.txt
+
+      - name: Compile Python sources
+        run: |
+          python -m compileall dags services src tests
+
+      - name: Validate JSON dashboards and configs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          paths = [
+              *Path("configs").rglob("*.json"),
+              *Path("monitoring/grafana/dashboards").rglob("*.json"),
+          ]
+
+          for path in paths:
+              with path.open(encoding="utf-8") as file:
+                  json.load(file)
+              print(f"valid json: {path}")
+          PY
+
+      - name: Validate Docker Compose config
+        run: docker compose config --quiet
+
+      - name: Run unit tests
+        run: pytest -v
+
+  docker:
+    name: Build and publish Docker images
+    runs-on: ubuntu-latest
+    needs: quality
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            dockerfile: Dockerfile
+            image_suffix: api
+          - service: airflow
+            dockerfile: Dockerfile.airflow
+            image_suffix: airflow
+          - service: kafka
+            dockerfile: Dockerfile.kafka
+            image_suffix: kafka
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set lowercase image names
+        id: image
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          image="${REGISTRY}/${repo}/${{ matrix.image_suffix }}"
+          echo "name=${image}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: Deploy to Docker host
+    runs-on: ubuntu-latest
+    needs: docker
+    if: >
+      github.event_name != 'pull_request' &&
+      (
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/master' ||
+        github.event.inputs.deploy == 'true'
+      )
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare deployment bundle
+        shell: bash
+        run: |
+          mkdir -p deploy
+          cp docker-compose.yml docker-compose.prod.yml deploy/
+          cp -r configs dags data monitoring reports services src deploy/
+          tar -czf deploy.tar.gz -C deploy .
+
+      - name: Upload compose files
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          test -n "${DEPLOY_HOST}"
+          test -n "${DEPLOY_USER}"
+          test -n "${DEPLOY_SSH_KEY}"
+
+          port="${DEPLOY_PORT:-22}"
+          path="${DEPLOY_PATH:-~/credit-scoring-mlops}"
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${port}" "${DEPLOY_HOST}" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/deploy_key -p "${port}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p ${path}"
+          scp -i ~/.ssh/deploy_key -P "${port}" deploy.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:${path}/deploy.tar.gz"
+          ssh -i ~/.ssh/deploy_key -p "${port}" "${DEPLOY_USER}@${DEPLOY_HOST}" "cd ${path} && tar -xzf deploy.tar.gz && rm deploy.tar.gz"
+
+      - name: Deploy stack
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN || github.token }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME || github.actor }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          path="${DEPLOY_PATH:-~/credit-scoring-mlops}"
+          repo="${GITHUB_REPOSITORY,,}"
+
+          ssh -i ~/.ssh/deploy_key -p "${port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "cd ${path} && \
+             echo '${GHCR_TOKEN}' | docker login ${REGISTRY} -u '${GHCR_USERNAME}' --password-stdin && \
+             API_IMAGE='${REGISTRY}/${repo}/api:${GITHUB_SHA}' \
+             AIRFLOW_IMAGE='${REGISTRY}/${repo}/airflow:${GITHUB_SHA}' \
+             KAFKA_IMAGE='${REGISTRY}/${repo}/kafka:${GITHUB_SHA}' \
+             docker compose -f docker-compose.yml -f docker-compose.prod.yml pull api airflow-init airflow-webserver airflow-scheduler kafka-consumer kafka-producer && \
+             API_IMAGE='${REGISTRY}/${repo}/api:${GITHUB_SHA}' \
+             AIRFLOW_IMAGE='${REGISTRY}/${repo}/airflow:${GITHUB_SHA}' \
+             KAFKA_IMAGE='${REGISTRY}/${repo}/kafka:${GITHUB_SHA}' \
+             docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build"

@@ -1,7 +1,12 @@
 .venv
 .git
+.github
+.pytest_cache
 __pycache__
 *.pyc
 .ipynb_checkpoints
+.env
+mlflow.db
+mlruns
 catboost_info
 reports

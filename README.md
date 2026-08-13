@@ -286,6 +286,8 @@ CreditScoringCatBoost@champion
 
 After running Docker Compose, the following services are available:
 
+Docker Compose publishes project ports on `127.0.0.1` by default, so services are reachable from the local machine but are not exposed on external network interfaces. If a local port conflicts with another project, copy `.env.example` to `.env` and change the corresponding `*_HOST_PORT` value.
+
 | Service | URL |
 |---|---|
 | FastAPI Swagger | http://127.0.0.1:8000/docs |
@@ -788,12 +790,18 @@ Current result:
 
 ## CI/CD
 
-GitHub Actions runs tests on every push and pull request.
+GitHub Actions runs tests, validates configs, builds Docker images, publishes them to GitHub Container Registry, and can deploy the stack to a remote Docker host.
 
 Workflow file:
 
 ```text
-.github/workflows/ci.yml
+.github/workflows/ci-cd.yml
+```
+
+Details:
+
+```text
+docs/ci-cd.md
 ```
 
 ---

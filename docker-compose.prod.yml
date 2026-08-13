@@ -1,0 +1,29 @@
+services:
+  api:
+    image: ${API_IMAGE}
+    build: null
+    restart: unless-stopped
+
+  airflow-init:
+    image: ${AIRFLOW_IMAGE}
+    build: null
+
+  airflow-webserver:
+    image: ${AIRFLOW_IMAGE}
+    build: null
+    restart: unless-stopped
+
+  airflow-scheduler:
+    image: ${AIRFLOW_IMAGE}
+    build: null
+    restart: unless-stopped
+
+  kafka-consumer:
+    image: ${KAFKA_IMAGE}
+    build: null
+    restart: unless-stopped
+
+  kafka-producer:
+    image: ${KAFKA_IMAGE}
+    build: null
+    restart: unless-stopped
