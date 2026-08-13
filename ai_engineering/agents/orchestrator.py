@@ -1,34 +1,30 @@
-"""Initial orchestration skeleton for the AI Engineering Command Center."""
+"""Orchestrator for the AI Engineering Command Center."""
+
+from __future__ import annotations
 
 from typing import Iterable
 
+from ai_engineering.agents.monitoring_agent import MonitoringAgent
 from ai_engineering.schemas.decisions import AgentDecision
 from ai_engineering.schemas.events import EngineeringEvent
 from ai_engineering.tools.base import AgentTool
 
 
 class OrchestratorAgent:
-    """Routes engineering events to controlled tools.
+    """Routes engineering events to controlled agent workflows."""
 
-    The first implementation is intentionally deterministic. An LLM planner will
-    be introduced only after the tool contracts and safety policies are tested.
-    """
-
-    def __init__(self, tools: Iterable[AgentTool] = ()) -> None:
+    def __init__(
+        self,
+        tools: Iterable[AgentTool] = (),
+        monitoring_agent: MonitoringAgent | None = None,
+    ) -> None:
         self._tools = {tool.name: tool for tool in tools}
+        self.monitoring_agent = monitoring_agent or MonitoringAgent()
 
     def handle(self, event: EngineeringEvent) -> AgentDecision:
-        """Create a safe proposal for the incoming event."""
+        """Run the registered workflow for an engineering event."""
         if event.event_type == "model_drift_detected":
-            return AgentDecision(
-                action="investigate_model_drift",
-                reason=(
-                    "Model drift was detected. Investigate production data and "
-                    "model metrics before considering retraining."
-                ),
-                parameters={"event_id": event.event_id},
-                requires_human_approval=False,
-            )
+            return self.monitoring_agent.investigate(event)
 
         return AgentDecision(
             action="manual_review",
