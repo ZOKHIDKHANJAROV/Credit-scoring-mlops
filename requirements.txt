@@ -26,3 +26,4 @@ shap
 prometheus-client
 requests
 confluent-kafka
+openai
