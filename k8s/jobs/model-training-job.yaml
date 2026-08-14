@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: credit-model-training
+  namespace: ai-engineering
+  labels:
+    app.kubernetes.io/name: credit-model-training
+    app.kubernetes.io/component: ml-training
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: credit-model-training
+        app.kubernetes.io/component: ml-training
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: trainer
+          image: credit-scoring-mlops:local
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "src.training.train_catboost"]
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
