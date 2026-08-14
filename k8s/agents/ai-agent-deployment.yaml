@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: agent
-          image: credit-scoring-mlops:local
-          imagePullPolicy: IfNotPresent
+          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:latest
+          imagePullPolicy: Always
           command:
             - uvicorn
             - ai_engineering.api.agent_service:app
@@ -73,6 +73,7 @@ metadata:
   namespace: ai-engineering
   labels:
     app.kubernetes.io/name: ai-engineering-agent
+    app.kubernetes.io/component: agent
 spec:
   selector:
     app.kubernetes.io/name: ai-engineering-agent
