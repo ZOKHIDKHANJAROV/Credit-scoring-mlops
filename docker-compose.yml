@@ -61,7 +61,7 @@ services:
       --allowed-hosts 'localhost:*,127.0.0.1:*,mlflow:5000,credit_scoring_mlflow:5000'
       --cors-allowed-origins 'http://localhost:*,http://127.0.0.1:*'
       "
-      
+
   api:
     build:
       context: .
@@ -80,8 +80,30 @@ services:
     ports:
       - "${HOST_BIND_ADDRESS:-127.0.0.1}:${API_HOST_PORT:-8000}:8000"
 
+  ai-agent:
+    build:
+      context: .
+      dockerfile: ai_engineering/Dockerfile
+    container_name: credit_scoring_ai_agent
+    restart: unless-stopped
+    depends_on:
+      - mlflow
+      - postgres
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT_NAME: credit-scoring
+      MLFLOW_MODEL_NAME: CreditScoringCatBoost
+      MLFLOW_MODEL_ALIAS: champion
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:8000/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-local}
+      LLM_MODEL: ${LLM_MODEL:-Qwen/Qwen3-8B}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${AI_AGENT_HOST_PORT:-8010}:8010"
+
   prometheus:
-    image: prom/prometheus:latest 
+    image: prom/prometheus:latest
     container_name: credit_scoring_prometheus
     depends_on:
       - api
