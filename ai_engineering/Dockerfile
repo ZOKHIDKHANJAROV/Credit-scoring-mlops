@@ -12,7 +12,6 @@ RUN pip install --upgrade pip \
 
 COPY ai_engineering ./ai_engineering
 COPY src ./src
-COPY reports ./reports
 
 EXPOSE 8010
 
