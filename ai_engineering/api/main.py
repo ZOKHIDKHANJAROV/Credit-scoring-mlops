@@ -24,7 +24,7 @@ from ai_engineering.workflows.retraining_workflow import RetrainingWorkflow
 
 app = FastAPI(
     title="AI Engineering Command Center",
-    version="0.3.0",
+    version="0.4.0",
     description="Agentic control plane for the credit-scoring MLOps platform.",
 )
 
@@ -48,6 +48,26 @@ class PromotionPlanRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+def _create_training_approval_if_needed(
+    action: str,
+    reason: str,
+    execution_plan: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Create one pending training approval for a command-center action."""
+    if action != "create_training_job":
+        return None
+
+    for item in approval_store.list_pending():
+        if item.action == action and item.reason == reason:
+            return item.model_dump(mode="json")
+
+    approval = approval_service.create_training_approval(
+        reason=reason,
+        execution_plan=execution_plan,
+    )
+    return approval.model_dump(mode="json")
+
+
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     """Serve the operator dashboard."""
@@ -67,22 +87,31 @@ def run_command_center(request: CommandCenterRunRequest) -> CommandCenterRunResp
     except (OSError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+    data = dict(result.data)
+    approval = _create_training_approval_if_needed(
+        action=result.action,
+        reason=result.reason,
+        execution_plan=data.get("kubernetes_job") or {},
+    )
+    if approval is not None:
+        data["approval"] = approval
+
     return CommandCenterRunResponse(
         status=result.status,
         action=result.action,
         reason=result.reason,
         requires_human_approval=result.requires_human_approval,
         stages=result.stages,
-        data=result.data,
+        data=data,
     )
 
 
 @app.post("/workflows/retraining/plan")
-def create_retraining_plan() -> dict:
+def create_retraining_plan() -> dict[str, Any]:
     """Build a retraining plan without executing Kubernetes actions."""
     plan = workflow.build_plan()
 
-    response = {
+    response: dict[str, Any] = {
         "status": plan.status,
         "reason": plan.reason,
         "drifted_features": plan.drifted_features,
@@ -92,17 +121,17 @@ def create_retraining_plan() -> dict:
     }
 
     if plan.status == "approval_required":
-        approval = approval_service.create_training_approval(
+        response["approval"] = _create_training_approval_if_needed(
+            action="create_training_job",
             reason=plan.reason,
             execution_plan=plan.kubernetes_job or {},
         )
-        response["approval"] = approval.model_dump(mode="json")
 
     return response
 
 
 @app.post("/workflows/model-promotion/plan")
-def create_model_promotion_plan(request: PromotionPlanRequest) -> dict:
+def create_model_promotion_plan(request: PromotionPlanRequest) -> dict[str, Any]:
     """Create a human approval request for an evaluated model promotion."""
     try:
         approval = promotion_service.create(
@@ -120,14 +149,15 @@ def create_model_promotion_plan(request: PromotionPlanRequest) -> dict:
 
 
 @app.get("/approvals")
-def list_approvals() -> dict[str, list[dict]]:
+def list_approvals() -> dict[str, list[dict[str, Any]]]:
+    """Return the complete approval history for the dashboard."""
     return {
-        "items": [item.model_dump(mode="json") for item in approval_store.list_pending()]
+        "items": [item.model_dump(mode="json") for item in approval_store.list_all()]
     }
 
 
 @app.post("/approvals/{approval_id}/decide")
-def decide_approval(approval_id: str, decision: ApprovalDecision) -> dict:
+def decide_approval(approval_id: str, decision: ApprovalDecision) -> dict[str, Any]:
     if decision.approval_id != approval_id:
         raise HTTPException(status_code=400, detail="approval_id does not match path")
 
@@ -148,7 +178,7 @@ def decide_approval(approval_id: str, decision: ApprovalDecision) -> dict:
 
 
 @app.post("/approvals/{approval_id}/execute")
-def execute_approval(approval_id: str) -> dict:
+def execute_approval(approval_id: str) -> dict[str, Any]:
     """Execute an approved action through its controlled executor."""
     request = approval_store.get(approval_id)
     if request is None:
@@ -157,8 +187,10 @@ def execute_approval(approval_id: str) -> dict:
     try:
         if request.action == ModelPromotionApprovalService.ACTION:
             result = promotion_service.execute(approval_id)
-        else:
+        elif request.action == "create_training_job":
             result = approval_service.execute(approval_id)
+        else:
+            raise ValueError(f"Unsupported approval action: {request.action}")
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
