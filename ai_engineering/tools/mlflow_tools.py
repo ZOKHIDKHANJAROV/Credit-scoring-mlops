@@ -51,6 +51,28 @@ class MLflowTools:
             "status": model_version.status,
         }
 
+    def get_run_metrics(self, run_id: str) -> dict[str, Any]:
+        """Return metrics for a specific MLflow run without loading its model artifact."""
+        if not run_id or not run_id.strip():
+            raise ValueError("run_id must not be empty")
+
+        try:
+            run = self.client.get_run(run_id)
+        except Exception as exc:
+            return {
+                "available": False,
+                "run_id": run_id,
+                "error": str(exc),
+            }
+
+        return {
+            "available": True,
+            "run_id": run.info.run_id,
+            "run_name": run.data.tags.get("mlflow.runName"),
+            "metrics": dict(run.data.metrics),
+            "params": dict(run.data.params),
+        }
+
     def get_latest_model_runs(self, limit: int = 10) -> list[dict[str, Any]]:
         """Return recent finished runs from the credit-scoring experiment."""
         if limit < 1 or limit > 100:
