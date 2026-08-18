@@ -1,108 +1,35 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Engineering Command Center</title>
-  <style>
-    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #e5e7eb; background: #0b1020; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; background: radial-gradient(circle at top right, #172554, #0b1020 45%); }
-    .shell { max-width: 1280px; margin: auto; padding: 28px; }
-    header { display:flex; justify-content:space-between; align-items:center; gap:20px; margin-bottom:24px; }
-    h1 { margin:0 0 6px; font-size:28px; } p { margin:0; color:#94a3b8; }
-    .badge { padding:8px 12px; border:1px solid #334155; border-radius:999px; font-size:13px; }
-    .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:16px; margin-bottom:16px; }
-    .card { background:rgba(15,23,42,.82); border:1px solid #263449; border-radius:14px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.18); }
-    .label { color:#94a3b8; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }
-    .value { margin-top:8px; font-size:22px; font-weight:700; }
-    .wide { grid-column: span 2; }
-    .section-title { margin:0 0 14px; font-size:16px; }
-    .row { display:flex; justify-content:space-between; gap:20px; padding:10px 0; border-bottom:1px solid #1e293b; }
-    .row:last-child { border-bottom:0; }
-    .ok { color:#86efac; } .warn { color:#facc15; } .danger { color:#fca5a5; }
-    .stages { display:flex; gap:8px; flex-wrap:wrap; }
-    .stage { padding:7px 10px; border-radius:8px; background:#1e293b; font-size:12px; }
-    button { border:0; border-radius:9px; padding:10px 14px; background:#2563eb; color:white; cursor:pointer; font-weight:600; }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    pre { white-space:pre-wrap; word-break:break-word; color:#cbd5e1; font-size:12px; max-height:260px; overflow:auto; }
-    @media (max-width:900px) { .grid { grid-template-columns:1fr 1fr; } .wide { grid-column:span 2; } }
-    @media (max-width:600px) { .grid { grid-template-columns:1fr; } .wide { grid-column:span 1; } header { align-items:flex-start; flex-direction:column; } }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Engineering Command Center</title>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;color:#e5e7eb;background:#0b1020}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top right,#172554,#0b1020 45%)}.shell{max-width:1280px;margin:auto;padding:28px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}h1{margin:0 0 6px;font-size:28px}p{margin:0;color:#94a3b8}.badge{padding:8px 12px;border:1px solid #334155;border-radius:999px;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.card{background:rgba(15,23,42,.82);border:1px solid #263449;border-radius:14px;padding:18px}.wide{grid-column:span 2}.full{grid-column:1/-1}.label{color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.value{margin-top:8px;font-size:22px;font-weight:700}.section-title{margin:0 0 14px;font-size:16px}.row{display:flex;justify-content:space-between;gap:20px;padding:10px 0;border-bottom:1px solid #1e293b}.row:last-child{border:0}.ok{color:#86efac}.warn{color:#facc15}.danger{color:#fca5a5}.stages{display:flex;gap:8px;flex-wrap:wrap}.stage{padding:7px 10px;border-radius:8px;background:#1e293b;font-size:12px}button{border:0;border-radius:9px;padding:9px 13px;background:#2563eb;color:white;cursor:pointer;font-weight:600;margin-right:8px}button.reject{background:#7f1d1d}button:disabled{opacity:.5;cursor:not-allowed}.approval{border:1px solid #334155;border-radius:12px;padding:14px;margin-bottom:10px;background:#0f172a}.approval-head{display:flex;justify-content:space-between;gap:12px}.status{font-size:11px;text-transform:uppercase;padding:5px 8px;border-radius:999px;background:#1e293b}.meta{color:#94a3b8;font-size:12px;margin:8px 0}pre{white-space:pre-wrap;word-break:break-word;color:#cbd5e1;font-size:12px;max-height:260px;overflow:auto}.empty{color:#64748b}@media(max-width:900px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:span 2}}@media(max-width:600px){.grid{grid-template-columns:1fr}.wide,.full{grid-column:span 1}header{align-items:flex-start;flex-direction:column}}
+</style>
 </head>
-<body>
-<div class="shell">
-  <header>
-    <div><h1>AI Engineering Command Center</h1><p>Credit-scoring MLOps control plane</p></div>
-    <div id="health" class="badge">Checking API...</div>
-  </header>
-
-  <div class="grid">
-    <div class="card"><div class="label">System</div><div id="system" class="value">--</div></div>
-    <div class="card"><div class="label">Champion</div><div id="champion" class="value">--</div></div>
-    <div class="card"><div class="label">Drift</div><div id="drift" class="value">--</div></div>
-    <div class="card"><div class="label">Decision</div><div id="decision" class="value">--</div></div>
-
-    <div class="card wide">
-      <h2 class="section-title">Monitoring</h2>
-      <div class="row"><span>Retraining required</span><strong id="retrain">--</strong></div>
-      <div class="row"><span>Reason</span><span id="reason">--</span></div>
-      <div class="row"><span>Drifted features</span><span id="features">--</span></div>
-    </div>
-
-    <div class="card wide">
-      <h2 class="section-title">Agent pipeline</h2>
-      <div id="stages" class="stages"><span class="stage">Waiting</span></div>
-      <div style="margin-top:16px"><button id="run">Run analysis</button></div>
-    </div>
-
-    <div class="card wide">
-      <h2 class="section-title">Raw agent result</h2>
-      <pre id="raw">No analysis executed yet.</pre>
-    </div>
-
-    <div class="card wide">
-      <h2 class="section-title">Pending approvals</h2>
-      <pre id="approvals">Loading...</pre>
-    </div>
-  </div>
-</div>
+<body><div class="shell">
+<header><div><h1>AI Engineering Command Center</h1><p>Credit-scoring MLOps control plane</p></div><div id="health" class="badge">Checking API...</div></header>
+<div class="grid">
+<div class="card"><div class="label">System</div><div id="system" class="value">--</div></div>
+<div class="card"><div class="label">Champion</div><div id="champion" class="value">--</div></div>
+<div class="card"><div class="label">Drift</div><div id="drift" class="value">--</div></div>
+<div class="card"><div class="label">Decision</div><div id="decision" class="value">--</div></div>
+<div class="card wide"><h2 class="section-title">Monitoring</h2><div class="row"><span>Retraining required</span><strong id="retrain">--</strong></div><div class="row"><span>Reason</span><span id="reason">--</span></div><div class="row"><span>Drifted features</span><span id="features">--</span></div></div>
+<div class="card wide"><h2 class="section-title">Agent pipeline</h2><div id="stages" class="stages"><span class="stage">Waiting</span></div><div style="margin-top:16px"><button id="run">Run analysis</button></div></div>
+<div class="card full"><h2 class="section-title">Approval Center</h2><div id="approval-list"><span class="empty">No pending approvals.</span></div></div>
+<div class="card wide"><h2 class="section-title">Raw agent result</h2><pre id="raw">No analysis executed yet.</pre></div>
+<div class="card wide"><h2 class="section-title">System events</h2><pre id="events">Dashboard initialized.</pre></div>
+</div></div>
 <script>
-const $ = id => document.getElementById(id);
-async function api(path, options) {
-  const response = await fetch(path, options);
-  if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
-  return response.json();
-}
-function setHealth(ok) { $('health').textContent = ok ? 'API HEALTHY' : 'API UNAVAILABLE'; $('health').className = `badge ${ok ? 'ok' : 'danger'}`; }
-function renderResult(result) {
-  $('decision').textContent = result.action || '--';
-  $('decision').className = `value ${result.requires_human_approval ? 'warn' : 'ok'}`;
-  $('reason').textContent = result.reason || '--';
-  const monitoring = result.data?.monitoring || {};
-  $('retrain').textContent = monitoring.retrain_required ? 'YES' : 'NO';
-  $('retrain').className = monitoring.retrain_required ? 'danger' : 'ok';
-  $('features').textContent = (monitoring.drifted_features || []).join(', ') || 'None';
-  $('drift').textContent = monitoring.drifted_features?.length ? `${monitoring.drifted_features.length} features` : 'NONE';
-  $('drift').className = `value ${monitoring.drifted_features?.length ? 'warn' : 'ok'}`;
-  $('stages').innerHTML = (result.stages || []).map(s => `<span class="stage">✓ ${s}</span>`).join('') || '<span class="stage">No stages</span>';
-  $('raw').textContent = JSON.stringify(result, null, 2);
-}
-async function refresh() {
-  try {
-    const health = await api('/health');
-    setHealth(health.status === 'ok'); $('system').textContent = 'HEALTHY'; $('system').className = 'value ok';
-    const approvals = await api('/approvals');
-    $('approvals').textContent = JSON.stringify(approvals, null, 2);
-  } catch (error) { setHealth(false); $('system').textContent = 'OFFLINE'; $('system').className = 'value danger'; $('approvals').textContent = error.message; }
-}
-$('run').onclick = async () => {
-  $('run').disabled = true; $('run').textContent = 'Analyzing...';
-  try { renderResult(await api('/api/v1/command-center/run', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({task:'auto'})})); }
-  catch (error) { $('raw').textContent = error.message; }
-  finally { $('run').disabled = false; $('run').textContent = 'Run analysis'; await refresh(); }
-};
+const $=id=>document.getElementById(id);
+async function api(path,options){const r=await fetch(path,options);if(!r.ok)throw new Error(`${r.status} ${await r.text()}`);return r.json()}
+function esc(v){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function log(m){$('events').textContent=`[${new Date().toLocaleTimeString()}] ${m}\n`+$('events').textContent}
+function renderResult(r){$('decision').textContent=r.action||'--';$('decision').className=`value ${r.requires_human_approval?'warn':'ok'}`;$('reason').textContent=r.reason||'--';const m=r.data?.monitoring||{};$('retrain').textContent=m.retrain_required?'YES':'NO';$('retrain').className=m.retrain_required?'danger':'ok';$('features').textContent=(m.drifted_features||[]).join(', ')||'None';$('drift').textContent=m.drifted_features?.length?`${m.drifted_features.length} features`:'NONE';$('drift').className=`value ${m.drifted_features?.length?'warn':'ok'}`;$('stages').innerHTML=(r.stages||[]).map(s=>`<span class="stage">✓ ${esc(s)}</span>`).join('')||'<span class="stage">No stages</span>';$('raw').textContent=JSON.stringify(r,null,2);const c=r.data?.evaluation?.champion||r.data?.champion;$('champion').textContent=c?.version?`v${c.version}`:c?.model_name||'--'}
+function renderApprovals(p){const items=p.items||[];if(!items.length){$('approval-list').innerHTML='<span class="empty">No pending approvals.</span>';return}$('approval-list').innerHTML=items.map(i=>{const id=esc(i.approval_id);return `<div class="approval"><div class="approval-head"><strong>${esc(i.action)}</strong><span class="status">${esc(i.status)}</span></div><div class="meta">ID: ${id}</div><div>${esc(i.reason)}</div><div style="margin-top:12px"><button onclick="decide('${id}',true)">Approve</button><button class="reject" onclick="decide('${id}',false)">Reject</button></div></div>`}).join('')}
+async function refresh(){try{const h=await api('/health');$('health').textContent=h.status==='ok'?'API HEALTHY':'API UNAVAILABLE';$('health').className=`badge ${h.status==='ok'?'ok':'danger'}`;$('system').textContent=h.status==='ok'?'HEALTHY':'OFFLINE';$('system').className=`value ${h.status==='ok'?'ok':'danger'}`;renderApprovals(await api('/approvals'))}catch(e){$('health').textContent='API UNAVAILABLE';$('health').className='badge danger';$('system').textContent='OFFLINE';$('system').className='value danger';$('approval-list').textContent=e.message}}
+async function decide(id,approved){try{await api(`/approvals/${encodeURIComponent(id)}/decide`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approval_id:id,approved,decided_by:'dashboard',comment:approved?'Approved from Command Center':'Rejected from Command Center'})});log(`${approved?'Approved':'Rejected'} approval ${id}`);await refresh()}catch(e){log(`Approval error: ${e.message}`);alert(e.message)}}
+$('run').onclick=async()=>{$('run').disabled=true;$('run').textContent='Analyzing...';try{const r=await api('/api/v1/command-center/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task:'auto'})});renderResult(r);log(`Agent completed: ${r.action}`)}catch(e){$('raw').textContent=e.message;log(`Agent error: ${e.message}`)}finally{$('run').disabled=false;$('run').textContent='Run analysis';await refresh()}};
 refresh();
-</script>
-</body>
-</html>
+</script></body></html>
