@@ -13,6 +13,9 @@ class ApprovalStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    EXECUTING = "executing"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class ApprovalRequest(BaseModel):
@@ -21,6 +24,11 @@ class ApprovalRequest(BaseModel):
     reason: str
     requested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     status: ApprovalStatus = ApprovalStatus.PENDING
+    execution_plan: dict = Field(default_factory=dict)
+    decided_at: datetime | None = None
+    decided_by: str | None = None
+    decision_comment: str | None = None
+    execution_result: dict | None = None
 
 
 class ApprovalDecision(BaseModel):
