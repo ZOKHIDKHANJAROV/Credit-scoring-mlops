@@ -1,14 +1,12 @@
-"""Small in-memory approval store for the first local workflow."""
+"""In-memory approval store for the first local workflow."""
 
 from __future__ import annotations
-
-from datetime import datetime, timezone
 
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest, ApprovalStatus
 
 
 class ApprovalStore:
-    """Store approval requests without introducing a database dependency yet."""
+    """Store approval requests and enforce their lifecycle transitions."""
 
     def __init__(self) -> None:
         self._items: dict[str, ApprovalRequest] = {}
@@ -21,6 +19,10 @@ class ApprovalStore:
 
     def get(self, approval_id: str) -> ApprovalRequest | None:
         return self._items.get(approval_id)
+
+    def list_all(self) -> list[ApprovalRequest]:
+        """Return all approval requests in creation order."""
+        return list(self._items.values())
 
     def list_pending(self) -> list[ApprovalRequest]:
         return [
