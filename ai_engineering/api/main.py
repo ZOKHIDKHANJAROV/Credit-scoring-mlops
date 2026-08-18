@@ -7,7 +7,12 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from ai_engineering.agents.orchestrator_v2 import CommandCenterOrchestrator
 from ai_engineering.schemas.approvals import ApprovalDecision
+from ai_engineering.schemas.command_center import (
+    CommandCenterRunRequest,
+    CommandCenterRunResponse,
+)
 from ai_engineering.services.approval_service import ApprovalService
 from ai_engineering.services.model_promotion_service import ModelPromotionApprovalService
 from ai_engineering.storage.approval_store import ApprovalStore
@@ -17,7 +22,7 @@ from ai_engineering.workflows.retraining_workflow import RetrainingWorkflow
 
 app = FastAPI(
     title="AI Engineering Command Center",
-    version="0.2.0",
+    version="0.3.0",
     description="Agentic control plane for the credit-scoring MLOps platform.",
 )
 
@@ -31,6 +36,7 @@ promotion_service = ModelPromotionApprovalService(
     store=approval_store,
     workflow=ModelPromotionWorkflow(),
 )
+command_center = CommandCenterOrchestrator()
 
 
 class PromotionPlanRequest(BaseModel):
@@ -42,6 +48,24 @@ class PromotionPlanRequest(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "ai-engineering-command-center"}
+
+
+@app.post("/api/v1/command-center/run", response_model=CommandCenterRunResponse)
+def run_command_center(request: CommandCenterRunRequest) -> CommandCenterRunResponse:
+    """Run the bounded monitoring/evaluation/approval planning pipeline."""
+    try:
+        result = command_center.run(request.task)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return CommandCenterRunResponse(
+        status=result.status,
+        action=result.action,
+        reason=result.reason,
+        requires_human_approval=result.requires_human_approval,
+        stages=result.stages,
+        data=result.data,
+    )
 
 
 @app.post("/workflows/retraining/plan")
