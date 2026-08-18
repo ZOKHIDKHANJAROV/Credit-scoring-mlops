@@ -5,7 +5,9 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest
+from ai_engineering.services.approval_service import ApprovalService
 from ai_engineering.storage.approval_store import ApprovalStore
+from ai_engineering.tools.kubernetes_executor import KubernetesExecutor
 from ai_engineering.workflows.retraining_workflow import RetrainingWorkflow
 
 app = FastAPI(
@@ -16,6 +18,10 @@ app = FastAPI(
 
 approval_store = ApprovalStore()
 workflow = RetrainingWorkflow()
+approval_service = ApprovalService(
+    store=approval_store,
+    executor=KubernetesExecutor(),
+)
 
 
 @app.get("/health")
@@ -38,11 +44,9 @@ def create_retraining_plan() -> dict:
     }
 
     if plan.status == "approval_required":
-        approval = approval_store.create(
-            ApprovalRequest(
-                action="run_model_training",
-                reason=plan.reason,
-            )
+        approval = approval_service.create_training_approval(
+            reason=plan.reason,
+            execution_plan=plan.kubernetes_job or {},
         )
         response["approval"] = approval.model_dump(mode="json")
 
@@ -62,10 +66,25 @@ def decide_approval(approval_id: str, decision: ApprovalDecision) -> dict:
         raise HTTPException(status_code=400, detail="approval_id does not match path")
 
     try:
-        request = approval_store.decide(decision)
+        request = approval_service.decide(decision)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     return request.model_dump(mode="json")
+
+
+@app.post("/approvals/{approval_id}/execute")
+def execute_approval(approval_id: str) -> dict:
+    """Execute an approved action through the controlled executor."""
+    request = approval_store.get(approval_id)
+    if request is None:
+        raise HTTPException(status_code=404, detail=f"Approval not found: {approval_id}")
+
+    try:
+        result = approval_service.execute(approval_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return result.model_dump(mode="json")
