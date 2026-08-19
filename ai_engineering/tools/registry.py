@@ -26,11 +26,15 @@ class ToolRegistry:
             self.register(tool)
 
     def register(self, tool: RegisteredTool) -> None:
+        """Register one tool and reject duplicate names."""
+        if not tool.name.strip():
+            raise ValueError("Tool name must not be empty")
         if tool.name in self._tools:
             raise ValueError(f"Tool already registered: {tool.name}")
         self._tools[tool.name] = tool
 
     def get(self, name: str) -> RegisteredTool:
+        """Return a registered tool or raise a clear allowlist error."""
         try:
             return self._tools[name]
         except KeyError as exc:
@@ -40,6 +44,7 @@ class ToolRegistry:
         return sorted(self._tools)
 
     def definitions(self) -> list[dict[str, Any]]:
+        """Return OpenAI-compatible function definitions for registered tools."""
         return [
             {
                 "type": "function",
@@ -53,7 +58,11 @@ class ToolRegistry:
         ]
 
     def execute(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Execute a tool only when its contract permits autonomous execution."""
         tool = self.get(name)
+        if not isinstance(arguments, dict):
+            raise TypeError("Tool arguments must be a JSON object")
+
         if tool.requires_human_approval:
             return {
                 "executed": False,
@@ -61,4 +70,5 @@ class ToolRegistry:
                 "tool": name,
                 "reason": "This tool cannot be executed by the LLM without approval.",
             }
+
         return tool.handler(**arguments)

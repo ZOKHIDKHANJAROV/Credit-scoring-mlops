@@ -12,6 +12,7 @@ RUN pip install --upgrade pip \
 
 COPY ai_engineering ./ai_engineering
 COPY src ./src
+COPY k8s ./k8s
 
 EXPOSE 8010
 

@@ -19,8 +19,8 @@ spec:
     spec:
       containers:
         - name: agent
-          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:latest
-          imagePullPolicy: Always
+          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-06fed5e
+          imagePullPolicy: IfNotPresent
           command:
             - uvicorn
             - ai_engineering.api.agent_service:app
