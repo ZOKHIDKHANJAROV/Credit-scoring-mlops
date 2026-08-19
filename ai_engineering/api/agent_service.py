@@ -18,7 +18,7 @@ from ai_engineering.tools.kubernetes_executor import KubernetesExecutor
 
 app = FastAPI(
     title="AI Engineering Command Center Agent",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 approval_store = ApprovalStore()
@@ -134,18 +134,23 @@ def decide_approval(approval_id: str, decision: ApprovalDecision) -> ApprovalReq
 
 @app.post("/api/v1/approvals/{approval_id}/execute", response_model=ApprovalRequest)
 def execute_approval(approval_id: str) -> ApprovalRequest:
+    """Execute an approved action exactly once.
+
+    The approval store performs the atomic approved -> executing transition.
+    A second concurrent request therefore receives HTTP 409 instead of running
+    the Kubernetes executor a second time.
+    """
     approval = approval_store.get(approval_id)
     if approval is None:
         raise HTTPException(status_code=404, detail="Approval not found")
-    if approval.status.value != "approved":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Only approved requests can execute; current status is {approval.status.value}",
-        )
     if approval.action != "create_training_job":
         raise HTTPException(status_code=400, detail=f"Unsupported approval action: {approval.action}")
 
-    approval_store.mark_executing(approval_id)
+    try:
+        approval_store.mark_executing(approval_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     audit_service.record(
         AuditEventType.EXECUTION_STARTED,
         trace_id=approval_id,
