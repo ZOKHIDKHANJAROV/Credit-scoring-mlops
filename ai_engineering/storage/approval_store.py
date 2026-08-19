@@ -1,10 +1,50 @@
-"""In-memory approval store with explicit state-transition guards."""
+"""PostgreSQL-backed approval store with explicit state-transition guards."""
 
 from __future__ import annotations
 
-from threading import RLock
+import json
+import os
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import JSON, DateTime, Integer, String, Text, create_engine, select
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest, ApprovalStatus
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class ApprovalRequestRow(Base):
+    __tablename__ = "ai_engineering_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    approval_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    action: Mapped[str] = mapped_column(String(200), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    execution_plan: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+
+    def to_schema(self) -> ApprovalRequest:
+        return ApprovalRequest(
+            approval_id=self.approval_id,
+            action=self.action,
+            reason=self.reason,
+            requested_at=self.requested_at,
+            status=ApprovalStatus(self.status),
+            execution_plan=self.execution_plan or {},
+            decided_at=self.decided_at,
+            decided_by=self.decided_by,
+            decision_comment=self.decision_comment,
+            execution_result=self.execution_result,
+        )
 
 
 class InvalidApprovalTransition(ValueError):
@@ -12,7 +52,7 @@ class InvalidApprovalTransition(ValueError):
 
 
 class ApprovalStore:
-    """Thread-safe approval state machine for the local workflow."""
+    """Persistent approval state machine backed by PostgreSQL."""
 
     _TRANSITIONS: dict[ApprovalStatus, frozenset[ApprovalStatus]] = {
         ApprovalStatus.PENDING: frozenset({ApprovalStatus.APPROVED, ApprovalStatus.REJECTED}),
@@ -23,67 +63,107 @@ class ApprovalStore:
         ApprovalStatus.FAILED: frozenset(),
     }
 
-    def __init__(self) -> None:
-        self._items: dict[str, ApprovalRequest] = {}
-        self._lock = RLock()
+    def __init__(self, database_url: str | None = None, auto_create: bool = True) -> None:
+        self.database_url = database_url or os.getenv(
+            "AI_AUDIT_DATABASE_URL",
+            os.getenv(
+                "MONITORING_DATABASE_URL",
+                "postgresql+pg8000://mlflow:mlflow@127.0.0.1:55432/mlflow",
+            ),
+        )
+        self.engine = create_engine(self.database_url, pool_pre_ping=True)
+        if auto_create:
+            self.create_tables()
+
+    def create_tables(self) -> None:
+        Base.metadata.create_all(self.engine)
 
     def create(self, request: ApprovalRequest) -> ApprovalRequest:
-        with self._lock:
-            if request.approval_id in self._items:
-                raise ValueError(f"Approval already exists: {request.approval_id}")
-            if request.status != ApprovalStatus.PENDING:
-                raise InvalidApprovalTransition("New approvals must start in pending state")
-            self._items[request.approval_id] = request
-            return request
+        if request.status != ApprovalStatus.PENDING:
+            raise InvalidApprovalTransition("New approvals must start in pending state")
+
+        row = ApprovalRequestRow(
+            approval_id=request.approval_id,
+            action=request.action,
+            reason=request.reason,
+            requested_at=request.requested_at,
+            status=request.status.value,
+            execution_plan=json.loads(json.dumps(request.execution_plan, default=str)),
+        )
+        with Session(self.engine) as session:
+            session.add(row)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+        return request
 
     def get(self, approval_id: str) -> ApprovalRequest | None:
-        with self._lock:
-            return self._items.get(approval_id)
+        with Session(self.engine) as session:
+            row = session.scalar(
+                select(ApprovalRequestRow).where(ApprovalRequestRow.approval_id == approval_id)
+            )
+            return row.to_schema() if row is not None else None
 
     def list_pending(self) -> list[ApprovalRequest]:
-        with self._lock:
-            return [item for item in self._items.values() if item.status == ApprovalStatus.PENDING]
+        with Session(self.engine) as session:
+            rows = session.scalars(
+                select(ApprovalRequestRow)
+                .where(ApprovalRequestRow.status == ApprovalStatus.PENDING.value)
+                .order_by(ApprovalRequestRow.requested_at.asc())
+            ).all()
+            return [row.to_schema() for row in rows]
 
     def decide(self, decision: ApprovalDecision) -> ApprovalRequest:
-        with self._lock:
-            request = self._get(decision.approval_id)
+        with Session(self.engine) as session:
+            row = self._get_locked(session, decision.approval_id)
             target = ApprovalStatus.APPROVED if decision.approved else ApprovalStatus.REJECTED
-            self._transition(request, target)
-            request.decided_at = decision.decided_at
-            request.decided_by = decision.decided_by
-            request.decision_comment = decision.comment
-            return request
+            self._transition(row, target)
+            row.decided_at = decision.decided_at
+            row.decided_by = decision.decided_by
+            row.decision_comment = decision.comment
+            session.commit()
+            return row.to_schema()
 
     def mark_executing(self, approval_id: str) -> ApprovalRequest:
-        with self._lock:
-            request = self._get(approval_id)
-            self._transition(request, ApprovalStatus.EXECUTING)
-            return request
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            self._transition(row, ApprovalStatus.EXECUTING)
+            session.commit()
+            return row.to_schema()
 
     def mark_completed(self, approval_id: str, result: dict) -> ApprovalRequest:
-        with self._lock:
-            request = self._get(approval_id)
-            self._transition(request, ApprovalStatus.COMPLETED)
-            request.execution_result = result
-            return request
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            self._transition(row, ApprovalStatus.COMPLETED)
+            row.execution_result = json.loads(json.dumps(result, default=str))
+            session.commit()
+            return row.to_schema()
 
     def mark_failed(self, approval_id: str, result: dict) -> ApprovalRequest:
-        with self._lock:
-            request = self._get(approval_id)
-            self._transition(request, ApprovalStatus.FAILED)
-            request.execution_result = result
-            return request
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            self._transition(row, ApprovalStatus.FAILED)
+            row.execution_result = json.loads(json.dumps(result, default=str))
+            session.commit()
+            return row.to_schema()
 
-    def _transition(self, request: ApprovalRequest, target: ApprovalStatus) -> None:
-        allowed = self._TRANSITIONS[request.status]
+    def _get_locked(self, session: Session, approval_id: str) -> ApprovalRequestRow:
+        row = session.scalar(
+            select(ApprovalRequestRow)
+            .where(ApprovalRequestRow.approval_id == approval_id)
+            .with_for_update()
+        )
+        if row is None:
+            raise KeyError(f"Approval not found: {approval_id}")
+        return row
+
+    def _transition(self, row: ApprovalRequestRow, target: ApprovalStatus) -> None:
+        current = ApprovalStatus(row.status)
+        allowed = self._TRANSITIONS[current]
         if target not in allowed:
             raise InvalidApprovalTransition(
-                f"Invalid approval transition: {request.status.value} -> {target.value}"
+                f"Invalid approval transition: {current.value} -> {target.value}"
             )
-        request.status = target
-
-    def _get(self, approval_id: str) -> ApprovalRequest:
-        request = self._items.get(approval_id)
-        if request is None:
-            raise KeyError(f"Approval not found: {approval_id}")
-        return request
+        row.status = target.value
