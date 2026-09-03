@@ -1,13 +1,13 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ai_engineering.schemas.audit import AuditEvent, AuditEventType
 from ai_engineering.storage.audit_store import AuditEventRow, AuditStore
 
 
-def make_event(trace_id: str = "trace-1") -> AuditEvent:
+def make_event(trace_id: str = "trace-1", occurred_at: datetime | None = None) -> AuditEvent:
     return AuditEvent(
         event_type=AuditEventType.TOOL_RESULT,
-        occurred_at=datetime.now(timezone.utc),
+        occurred_at=occurred_at or datetime.now(timezone.utc),
         trace_id=trace_id,
         tool_name="monitoring_get_retrain_signal",
         status="completed",
@@ -26,6 +26,20 @@ def test_audit_store_can_use_sqlite_without_postgres() -> None:
     assert events[0].event_id == event.event_id
     assert events[0].payload["retrain_required"] is True
     assert store.count() == 1
+
+
+def test_audit_store_returns_trace_events_in_chronological_order() -> None:
+    store = AuditStore("sqlite+pysqlite:///:memory:")
+    now = datetime.now(timezone.utc)
+    first = make_event("trace-order", now)
+    second = make_event("trace-order", now + timedelta(seconds=1))
+
+    store.append(first)
+    store.append(second)
+
+    events = store.list(trace_id="trace-order")
+
+    assert [event.event_id for event in events] == [first.event_id, second.event_id]
 
 
 def test_audit_store_filters_event_type_and_limit() -> None:
