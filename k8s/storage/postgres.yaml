@@ -8,6 +8,7 @@ stringData:
   POSTGRES_USER: mlflow
   POSTGRES_PASSWORD: mlflow
   POSTGRES_DB: mlflow
+  AI_AUDIT_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@ai-engineering-postgres:5432/mlflow
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -95,6 +96,7 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: ai-engineering-postgres
+    app.kubernetes.io/component: database
   ports:
     - name: postgres
       port: 5432
