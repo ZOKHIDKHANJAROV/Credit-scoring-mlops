@@ -10,20 +10,20 @@ def test_approval_happy_path() -> None:
     store = ApprovalStore()
     request = store.create(make_request())
 
-    store.decide(ApprovalDecision(approval_id=request.approval_id, approved=True))
+    request = store.decide(ApprovalDecision(approval_id=request.approval_id, approved=True))
     assert request.status == ApprovalStatus.APPROVED
 
-    store.mark_executing(request.approval_id)
+    request = store.mark_executing(request.approval_id)
     assert request.status == ApprovalStatus.EXECUTING
 
-    store.mark_completed(request.approval_id, {"executed": True})
+    request = store.mark_completed(request.approval_id, {"executed": True})
     assert request.status == ApprovalStatus.COMPLETED
 
 
 def test_rejection_is_terminal() -> None:
     store = ApprovalStore()
     request = store.create(make_request())
-    store.decide(ApprovalDecision(approval_id=request.approval_id, approved=False))
+    request = store.decide(ApprovalDecision(approval_id=request.approval_id, approved=False))
 
     assert request.status == ApprovalStatus.REJECTED
 
@@ -38,9 +38,9 @@ def test_rejection_is_terminal() -> None:
 def test_completed_is_terminal_and_cannot_be_reexecuted() -> None:
     store = ApprovalStore()
     request = store.create(make_request())
-    store.decide(ApprovalDecision(approval_id=request.approval_id, approved=True))
-    store.mark_executing(request.approval_id)
-    store.mark_completed(request.approval_id, {"executed": True})
+    request = store.decide(ApprovalDecision(approval_id=request.approval_id, approved=True))
+    request = store.mark_executing(request.approval_id)
+    request = store.mark_completed(request.approval_id, {"executed": True})
 
     try:
         store.mark_executing(request.approval_id)
