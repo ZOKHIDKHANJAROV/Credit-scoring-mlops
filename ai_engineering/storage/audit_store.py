@@ -94,7 +94,8 @@ class AuditStore:
             raise ValueError("limit must be between 1 and 1000")
 
         with Session(self.engine) as session:
-            statement = select(AuditEventRow).order_by(AuditEventRow.occurred_at.desc())
+            order = AuditEventRow.occurred_at.asc() if trace_id is not None else AuditEventRow.occurred_at.desc()
+            statement = select(AuditEventRow).order_by(order, AuditEventRow.id.asc())
             if trace_id is not None:
                 statement = statement.where(AuditEventRow.trace_id == trace_id)
             if event_type is not None:
