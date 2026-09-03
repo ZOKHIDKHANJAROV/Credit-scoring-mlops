@@ -115,7 +115,15 @@ class ApprovalStore:
             ).all()
             return [row.to_schema() for row in rows]
 
-    def decide(self, decision: ApprovalDecision) -> ApprovalRequest:
+    def _sync_request(self, request: ApprovalRequest, updated: ApprovalRequest) -> ApprovalRequest:
+        request.status = updated.status
+        request.decided_at = updated.decided_at
+        request.decided_by = updated.decided_by
+        request.decision_comment = updated.decision_comment
+        request.execution_result = updated.execution_result
+        return request
+
+    def decide(self, decision: ApprovalDecision, request: ApprovalRequest | None = None) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, decision.approval_id)
             target = ApprovalStatus.APPROVED if decision.approved else ApprovalStatus.REJECTED
@@ -124,30 +132,38 @@ class ApprovalStore:
             row.decided_by = decision.decided_by
             row.decision_comment = decision.comment
             session.commit()
-            return row.to_schema()
+            updated = row.to_schema()
+        return self._sync_request(request, updated) if request is not None else updated
 
-    def mark_executing(self, approval_id: str) -> ApprovalRequest:
+    def mark_executing(self, approval_id: str, request: ApprovalRequest | None = None) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             self._transition(row, ApprovalStatus.EXECUTING)
             session.commit()
-            return row.to_schema()
+            updated = row.to_schema()
+        return self._sync_request(request, updated) if request is not None else updated
 
-    def mark_completed(self, approval_id: str, result: dict) -> ApprovalRequest:
+    def mark_completed(
+        self, approval_id: str, result: dict, request: ApprovalRequest | None = None
+    ) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             self._transition(row, ApprovalStatus.COMPLETED)
             row.execution_result = json.loads(json.dumps(result, default=str))
             session.commit()
-            return row.to_schema()
+            updated = row.to_schema()
+        return self._sync_request(request, updated) if request is not None else updated
 
-    def mark_failed(self, approval_id: str, result: dict) -> ApprovalRequest:
+    def mark_failed(
+        self, approval_id: str, result: dict, request: ApprovalRequest | None = None
+    ) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             self._transition(row, ApprovalStatus.FAILED)
             row.execution_result = json.loads(json.dumps(result, default=str))
             session.commit()
-            return row.to_schema()
+            updated = row.to_schema()
+        return self._sync_request(request, updated) if request is not None else updated
 
     def _get_locked(self, session: Session, approval_id: str) -> ApprovalRequestRow:
         row = session.scalar(
