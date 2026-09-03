@@ -82,9 +82,7 @@ def test_ml_agent_returns_manual_review_when_champion_metrics_are_unavailable() 
         candidate={
             "run_name": "catboost_baseline",
             "run_id": "candidate",
-            "roc_auc": 0.84,
-            "recall": 0.70,
-            "precision": 0.60,
+            "metrics": {"roc_auc": 0.84, "recall": 0.70, "precision": 0.60},
         },
     )
 
@@ -105,9 +103,7 @@ def test_ml_agent_evaluates_candidate_without_mutating_tools() -> None:
         candidate={
             "run_name": "catboost_baseline",
             "run_id": "candidate",
-            "roc_auc": 0.84,
-            "recall": 0.70,
-            "precision": 0.60,
+            "metrics": {"roc_auc": 0.84, "recall": 0.70, "precision": 0.60},
         },
     )
 
