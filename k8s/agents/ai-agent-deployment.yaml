@@ -40,6 +40,8 @@ spec:
               value: "CreditScoringCatBoost"
             - name: MLFLOW_MODEL_ALIAS
               value: "champion"
+            - name: AI_AUDIT_DATABASE_URL
+              value: "postgresql+pg8000://mlflow:mlflow@ai-engineering-postgres:5432/mlflow"
             - name: LLM_BASE_URL
               value: "http://vllm:8000/v1"
             - name: LLM_API_KEY
