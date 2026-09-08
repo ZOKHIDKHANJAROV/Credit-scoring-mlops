@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 from ai_engineering.api.security import api_auth
 from ai_engineering.llm.provider import OpenAICompatibleProvider
 from ai_engineering.llm.tool_calling import ToolCallingAgent
+from ai_engineering.observability import (
+    APPROVAL_REQUESTS_TOTAL,
+    EXECUTION_UNKNOWN_TOTAL,
+    EXECUTIONS_TOTAL,
+    metrics_response,
+)
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest
 from ai_engineering.schemas.audit import AuditEvent, AuditEventType
 from ai_engineering.services.audit_service import AuditService
@@ -20,7 +26,7 @@ from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown,
 
 ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
-app = FastAPI(title="AI Engineering Command Center Agent", version="0.6.0")
+app = FastAPI(title="AI Engineering Command Center Agent", version="0.7.0")
 approval_store = ApprovalStore()
 audit_store = AuditStore()
 audit_service = AuditService(audit_store)
@@ -64,6 +70,12 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "ai-engineering-agent"}
 
 
+@app.get("/metrics", include_in_schema=False)
+def metrics() -> Response:
+    payload, content_type = metrics_response()
+    return Response(content=payload, media_type=content_type.split(";", 1)[0])
+
+
 @app.get("/api/v1/agent/tools", dependencies=[Depends(authenticated)])
 def list_tools() -> dict[str, list[str]]:
     return {"tools": build_default_registry().names()}
@@ -93,6 +105,7 @@ def create_approval(request: ApprovalCreateRequest) -> ApprovalRequest:
         execution_plan=request.execution_plan,
     )
     approval_store.create(approval)
+    APPROVAL_REQUESTS_TOTAL.labels(action=approval.action).inc()
     audit_service.record(
         AuditEventType.APPROVAL_REQUESTED,
         trace_id=approval.approval_id,
@@ -152,18 +165,23 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
     try:
         result = kubernetes_executor.apply_training_job(approved=True, execution_id=approval_id)
     except KubernetesExecutionUnknown as exc:
+        EXECUTIONS_TOTAL.labels(action=approval.action, status="unknown").inc()
+        EXECUTION_UNKNOWN_TOTAL.labels(action=approval.action).inc()
         unknown = approval_store.mark_unknown(approval_id, {"executed": False, "unknown": True, "error": str(exc)})
         audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error="execution outcome unknown")
         return unknown
     except Exception as exc:
+        EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
         failure = {"executed": False, "error": str(exc)}
         approval_store.mark_failed(approval_id, failure)
         audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
         raise HTTPException(status_code=500, detail="Execution failed") from exc
     if result.get("executed") is True:
+        EXECUTIONS_TOTAL.labels(action=approval.action, status="completed").inc()
         completed = approval_store.mark_completed(approval_id, result)
         audit_service.record(AuditEventType.EXECUTION_COMPLETED, trace_id=approval_id, action=approval.action, status="completed", payload={"result": result})
         return completed
+    EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
     failed = approval_store.mark_failed(approval_id, result)
     audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", payload={"result": result})
     return failed
