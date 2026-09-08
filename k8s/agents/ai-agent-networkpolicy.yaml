@@ -40,3 +40,9 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+    - to:
+        - ipBlock:
+            cidr: 10.96.0.1/32
+      ports:
+        - protocol: TCP
+          port: 443
