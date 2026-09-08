@@ -16,6 +16,10 @@ spec:
       labels:
         app.kubernetes.io/name: ai-engineering-agent
         app.kubernetes.io/component: agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8010"
     spec:
       serviceAccountName: ai-engineering-agent
       automountServiceAccountToken: true
