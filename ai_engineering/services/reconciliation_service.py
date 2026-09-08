@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ai_engineering.observability import EXECUTION_RETRIES_TOTAL
 from ai_engineering.schemas.approvals import ApprovalRequest, ApprovalStatus
 from ai_engineering.schemas.audit import AuditEventType
 from ai_engineering.services.audit_service import AuditService
@@ -82,6 +83,7 @@ class ReconciliationService:
             status="retrying",
             payload=result,
         )
+        EXECUTION_RETRIES_TOTAL.labels(action=approval.action).inc()
         self.store.mark_retry_executing(approval_id)
         try:
             execution = self.executor.apply_training_job(approved=True, execution_id=approval_id)
