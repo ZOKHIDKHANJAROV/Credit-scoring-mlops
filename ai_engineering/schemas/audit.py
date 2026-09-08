@@ -18,6 +18,10 @@ class AuditEventType(str, Enum):
     APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_DECIDED = "approval_decided"
     EXECUTION_STARTED = "execution_started"
+    EXECUTION_UNKNOWN = "execution_unknown"
+    EXECUTION_RECONCILIATION_STARTED = "execution_reconciliation_started"
+    EXECUTION_RECONCILIATION_COMPLETED = "execution_reconciliation_completed"
+    EXECUTION_RETRY = "execution_retry"
     EXECUTION_COMPLETED = "execution_completed"
     EXECUTION_FAILED = "execution_failed"
 

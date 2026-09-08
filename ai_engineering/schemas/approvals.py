@@ -14,6 +14,7 @@ class ApprovalStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     EXECUTING = "executing"
+    UNKNOWN = "unknown"
     COMPLETED = "completed"
     FAILED = "failed"
 
