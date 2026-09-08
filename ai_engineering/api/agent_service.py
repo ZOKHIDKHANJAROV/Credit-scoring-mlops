@@ -10,6 +10,7 @@ from ai_engineering.llm.provider import OpenAICompatibleProvider
 from ai_engineering.llm.tool_calling import ToolCallingAgent
 from ai_engineering.observability import (
     APPROVAL_REQUESTS_TOTAL,
+    EXECUTION_DURATION_SECONDS,
     EXECUTION_UNKNOWN_TOTAL,
     EXECUTIONS_TOTAL,
     metrics_response,
@@ -162,29 +163,30 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     audit_service.record(AuditEventType.EXECUTION_STARTED, trace_id=approval_id, action=approval.action, status="started")
-    try:
-        result = kubernetes_executor.apply_training_job(approved=True, execution_id=approval_id)
-    except KubernetesExecutionUnknown as exc:
-        EXECUTIONS_TOTAL.labels(action=approval.action, status="unknown").inc()
-        EXECUTION_UNKNOWN_TOTAL.labels(action=approval.action).inc()
-        unknown = approval_store.mark_unknown(approval_id, {"executed": False, "unknown": True, "error": str(exc)})
-        audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error="execution outcome unknown")
-        return unknown
-    except Exception as exc:
+    with EXECUTION_DURATION_SECONDS.labels(action=approval.action).time():
+        try:
+            result = kubernetes_executor.apply_training_job(approved=True, execution_id=approval_id)
+        except KubernetesExecutionUnknown as exc:
+            EXECUTIONS_TOTAL.labels(action=approval.action, status="unknown").inc()
+            EXECUTION_UNKNOWN_TOTAL.labels(action=approval.action).inc()
+            unknown = approval_store.mark_unknown(approval_id, {"executed": False, "unknown": True, "error": str(exc)})
+            audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error="execution outcome unknown")
+            return unknown
+        except Exception as exc:
+            EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
+            failure = {"executed": False, "error": str(exc)}
+            approval_store.mark_failed(approval_id, failure)
+            audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
+            raise HTTPException(status_code=500, detail="Execution failed") from exc
+        if result.get("executed") is True:
+            EXECUTIONS_TOTAL.labels(action=approval.action, status="completed").inc()
+            completed = approval_store.mark_completed(approval_id, result)
+            audit_service.record(AuditEventType.EXECUTION_COMPLETED, trace_id=approval_id, action=approval.action, status="completed", payload={"result": result})
+            return completed
         EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
-        failure = {"executed": False, "error": str(exc)}
-        approval_store.mark_failed(approval_id, failure)
-        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
-        raise HTTPException(status_code=500, detail="Execution failed") from exc
-    if result.get("executed") is True:
-        EXECUTIONS_TOTAL.labels(action=approval.action, status="completed").inc()
-        completed = approval_store.mark_completed(approval_id, result)
-        audit_service.record(AuditEventType.EXECUTION_COMPLETED, trace_id=approval_id, action=approval.action, status="completed", payload={"result": result})
-        return completed
-    EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
-    failed = approval_store.mark_failed(approval_id, result)
-    audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", payload={"result": result})
-    return failed
+        failed = approval_store.mark_failed(approval_id, result)
+        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", payload={"result": result})
+        return failed
 
 
 @app.post("/api/v1/approvals/{approval_id}/reconcile", response_model=ApprovalRequest, dependencies=[Depends(authenticated)])
