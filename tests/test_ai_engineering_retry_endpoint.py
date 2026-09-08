@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from fastapi.testclient import TestClient
 
 from ai_engineering.api import agent_service
@@ -12,44 +14,31 @@ def make_unknown() -> ApprovalRequest:
         ApprovalRequest(action="create_training_job", reason="retry endpoint test")
     )
     agent_service.approval_store.decide(
-        ApprovalDecision(
-            approval_id=request.approval_id,
-            approved=True,
-            decided_by="test",
-        )
+        ApprovalDecision(approval_id=request.approval_id, approved=True, decided_by="test")
     )
     agent_service.approval_store.mark_executing(request.approval_id)
-    return agent_service.approval_store.mark_unknown(
-        request.approval_id,
-        {"unknown": True},
-    )
+    return agent_service.approval_store.mark_unknown(request.approval_id, {"unknown": True})
 
 
 def test_retry_endpoint_reexecutes_only_after_job_absence(monkeypatch) -> None:
     agent_service.approval_store.clear()
     agent_service.audit_store.clear()
     request = make_unknown()
+    apply = Mock(return_value={"executed": True, "execution_id": request.approval_id})
 
     monkeypatch.setattr(
         agent_service.kubernetes_executor,
         "get_training_job_status",
-        lambda job_name: {"exists": False, "status": "absent", "job_name": job_name},
+        Mock(return_value={"exists": False, "status": "absent", "job_name": f"credit-training-{request.approval_id}"}),
     )
-    apply = monkeypatch.setattr(
-        agent_service.kubernetes_executor,
-        "apply_training_job",
-        lambda approved, execution_id: {
-            "executed": True,
-            "execution_id": execution_id,
-        },
-    )
+    monkeypatch.setattr(agent_service.kubernetes_executor, "apply_training_job", apply)
 
     response = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
 
     assert response.status_code == 200
     assert response.json()["status"] == ApprovalStatus.COMPLETED.value
     assert response.json()["approval_id"] == request.approval_id
-    assert apply is None
+    apply.assert_called_once_with(approved=True, execution_id=request.approval_id)
 
     events = client.get(f"/api/v1/audit/traces/{request.approval_id}")
     assert events.status_code == 200
@@ -60,21 +49,43 @@ def test_retry_endpoint_does_not_retry_when_job_exists(monkeypatch) -> None:
     agent_service.approval_store.clear()
     agent_service.audit_store.clear()
     request = make_unknown()
-    apply_calls = []
+    apply = Mock()
 
     monkeypatch.setattr(
         agent_service.kubernetes_executor,
         "get_training_job_status",
-        lambda job_name: {"exists": True, "status": "running", "job_name": job_name},
+        Mock(return_value={"exists": True, "status": "running", "job_name": f"credit-training-{request.approval_id}"}),
     )
-    monkeypatch.setattr(
-        agent_service.kubernetes_executor,
-        "apply_training_job",
-        lambda **kwargs: apply_calls.append(kwargs),
-    )
+    monkeypatch.setattr(agent_service.kubernetes_executor, "apply_training_job", apply)
 
     response = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
 
     assert response.status_code == 200
     assert response.json()["status"] == ApprovalStatus.UNKNOWN.value
-    assert apply_calls == []
+    apply.assert_not_called()
+
+
+def test_retry_endpoint_reconciles_when_job_already_exists_and_completed(monkeypatch) -> None:
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+    request = make_unknown()
+    apply = Mock()
+
+    monkeypatch.setattr(
+        agent_service.kubernetes_executor,
+        "get_training_job_status",
+        Mock(return_value={"exists": True, "status": "completed", "job_name": f"credit-training-{request.approval_id}"}),
+    )
+    monkeypatch.setattr(agent_service.kubernetes_executor, "apply_training_job", apply)
+
+    response = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == ApprovalStatus.COMPLETED.value
+    apply.assert_not_called()
+
+
+def test_retry_endpoint_returns_404_for_unknown_approval() -> None:
+    agent_service.approval_store.clear()
+    response = client.post("/api/v1/approvals/00000000-0000-0000-0000-000000000000/retry")
+    assert response.status_code == 404
