@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from ai_engineering.llm.provider import OpenAICompatibleProvider
+from ai_engineering.observability import (
+    AGENT_RUN_DURATION_SECONDS,
+    AGENT_RUN_FAILURES_TOTAL,
+    AGENT_RUNS_TOTAL,
+    TOOL_CALLS_TOTAL,
+    TOOL_DURATION_SECONDS,
+)
 from ai_engineering.schemas.audit import AuditEventType
 from ai_engineering.services.audit_service import AuditService
 from ai_engineering.tools.registry import ToolRegistry
@@ -30,7 +38,15 @@ class ToolCallingAgent:
 
     def run(self, task: str) -> dict[str, Any]:
         """Run the agent and return the final answer, tools, and trace ID."""
+        started_at = time.perf_counter()
         trace_id = self.audit.new_trace_id()
+
+        def finish(status: str, *, failure_reason: str | None = None) -> None:
+            AGENT_RUNS_TOTAL.labels(status=status).inc()
+            AGENT_RUN_DURATION_SECONDS.observe(time.perf_counter() - started_at)
+            if failure_reason:
+                AGENT_RUN_FAILURES_TOTAL.labels(reason=failure_reason).inc()
+
         self.audit.record(
             AuditEventType.AGENT_REQUESTED,
             trace_id,
@@ -41,6 +57,7 @@ class ToolCallingAgent:
         try:
             from openai import OpenAI
         except ImportError as exc:
+            finish("failed", failure_reason="missing_openai_dependency")
             self.audit.record(
                 AuditEventType.EXECUTION_FAILED,
                 trace_id,
@@ -77,6 +94,7 @@ class ToolCallingAgent:
 
             if not tool_calls:
                 answer = message.content or ""
+                finish("completed")
                 self.audit.record(
                     AuditEventType.EXECUTION_COMPLETED,
                     trace_id,
@@ -119,18 +137,23 @@ class ToolCallingAgent:
                     payload={"arguments": call.function.arguments},
                 )
 
+                tool_started_at = time.perf_counter()
                 try:
-                    arguments = json.loads(call.function.arguments or "{}")
-                except json.JSONDecodeError:
-                    result = {"error": "Invalid JSON tool arguments"}
-                else:
                     try:
-                        result = self.registry.execute(name, arguments)
-                        used_tools.append(name)
-                    except (KeyError, TypeError, ValueError) as exc:
-                        result = {"error": str(exc)}
+                        arguments = json.loads(call.function.arguments or "{}")
+                    except json.JSONDecodeError:
+                        result = {"error": "Invalid JSON tool arguments"}
+                    else:
+                        try:
+                            result = self.registry.execute(name, arguments)
+                            used_tools.append(name)
+                        except (KeyError, TypeError, ValueError) as exc:
+                            result = {"error": str(exc)}
+                finally:
+                    TOOL_DURATION_SECONDS.labels(tool=name).observe(time.perf_counter() - tool_started_at)
 
                 tool_status = "failed" if "error" in result else "completed"
+                TOOL_CALLS_TOTAL.labels(tool=name, status=tool_status).inc()
                 self.audit.record(
                     AuditEventType.TOOL_RESULT,
                     trace_id,
@@ -146,6 +169,7 @@ class ToolCallingAgent:
                     }
                 )
 
+        finish("max_rounds_exceeded", failure_reason="max_rounds_exceeded")
         self.audit.record(
             AuditEventType.EXECUTION_FAILED,
             trace_id,
