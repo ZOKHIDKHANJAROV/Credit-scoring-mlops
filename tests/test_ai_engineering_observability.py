@@ -19,8 +19,10 @@ def test_metrics_payload_contains_command_center_metrics():
     assert "agent_runs_total" in text
     assert "agent_run_duration_seconds" in text
     assert "agent_tool_calls_total" in text
+    assert "agent_tool_duration_seconds" in text
     assert "approval_requests_total" in text
     assert "execution_total" in text
+    assert "execution_duration_seconds" in text
     assert "execution_unknown_total" in text
     assert "execution_retry_total" in text
 
