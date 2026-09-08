@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from ai_engineering.api.security import api_auth
 from ai_engineering.llm.provider import OpenAICompatibleProvider
 from ai_engineering.llm.tool_calling import ToolCallingAgent
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest
@@ -15,7 +16,9 @@ from ai_engineering.storage.approval_store import ApprovalStore
 from ai_engineering.storage.audit_store import AuditStore
 from ai_engineering.tools.default_registry import build_default_registry
 from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown, KubernetesExecutor
-from ai_engineering.api.security import api_auth
+
+
+ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
 app = FastAPI(title="AI Engineering Command Center Agent", version="0.6.0")
 approval_store = ApprovalStore()
@@ -82,6 +85,8 @@ def run_agent(request: AgentRunRequest) -> AgentRunResponse:
 
 @app.post("/api/v1/approvals", response_model=ApprovalRequest, status_code=201, dependencies=[Depends(authenticated)])
 def create_approval(request: ApprovalCreateRequest) -> ApprovalRequest:
+    if request.action not in ALLOWED_MUTATING_ACTIONS:
+        raise HTTPException(status_code=400, detail="Unsupported approval action")
     approval = ApprovalRequest(
         action=request.action,
         reason=request.reason,
@@ -137,8 +142,8 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
     approval = approval_store.get(approval_id)
     if approval is None:
         raise HTTPException(status_code=404, detail="Approval not found")
-    if approval.action != "create_training_job":
-        raise HTTPException(status_code=400, detail=f"Unsupported approval action: {approval.action}")
+    if approval.action not in ALLOWED_MUTATING_ACTIONS:
+        raise HTTPException(status_code=400, detail="Unsupported approval action")
     try:
         approval = approval_store.mark_executing(approval_id)
     except ValueError as exc:
@@ -148,12 +153,12 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
         result = kubernetes_executor.apply_training_job(approved=True, execution_id=approval_id)
     except KubernetesExecutionUnknown as exc:
         unknown = approval_store.mark_unknown(approval_id, {"executed": False, "unknown": True, "error": str(exc)})
-        audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error=str(exc))
+        audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error="execution outcome unknown")
         return unknown
     except Exception as exc:
         failure = {"executed": False, "error": str(exc)}
         approval_store.mark_failed(approval_id, failure)
-        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error=str(exc), payload={"result": failure})
+        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
         raise HTTPException(status_code=500, detail="Execution failed") from exc
     if result.get("executed") is True:
         completed = approval_store.mark_completed(approval_id, result)
@@ -169,7 +174,7 @@ def reconcile_approval(approval_id: str) -> ApprovalRequest:
     try:
         return reconciliation_service.reconcile(approval_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Approval not found") from exc
     except KubernetesExecutionUnknown as exc:
         raise HTTPException(status_code=503, detail="Reconciliation outcome is unknown") from exc
 
