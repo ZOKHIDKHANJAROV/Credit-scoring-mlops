@@ -83,3 +83,32 @@ def test_agent_decision_does_not_create_approval_for_read_only_action(monkeypatc
     assert payload["approval_id"] is None
     assert payload["trace_id"] == "trace-456"
     assert client.get("/api/v1/approvals").json() == []
+
+
+def test_agent_decision_endpoint_does_not_turn_manual_review_into_mutation(monkeypatch) -> None:
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+
+    monkeypatch.setattr(
+        agent_service,
+        "build_orchestrator",
+        lambda: FakeOrchestrator(
+            AgentDecision(
+                action="manual_review",
+                reason="LLM output is outside the allowlist",
+                parameters={},
+                requires_human_approval=True,
+            )
+        ),
+    )
+
+    response = client.post(
+        "/api/v1/agent/decision",
+        json={"task": "Perform an unsupported operation", "context": {}},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "manual_review"
+    assert payload["approval_id"] is None
+    assert client.get("/api/v1/approvals").json() == []
