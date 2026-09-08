@@ -17,7 +17,8 @@ spec:
         app.kubernetes.io/name: ai-engineering-agent
         app.kubernetes.io/component: agent
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: ai-engineering-agent
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         seccompProfile:
