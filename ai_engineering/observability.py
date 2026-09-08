@@ -43,13 +43,19 @@ EXECUTIONS_TOTAL = Counter(
 )
 EXECUTION_UNKNOWN_TOTAL = Counter(
     "execution_unknown_total",
-    "Total executions whose outcome became unknown.",
+    "Total executions whose outcome is unknown.",
     ("action",),
 )
 EXECUTION_RETRIES_TOTAL = Counter(
     "execution_retry_total",
-    "Total execution retries after reconciliation.",
+    "Total execution retries after reconciliation confirmed Job absence.",
     ("action",),
+)
+EXECUTION_DURATION_SECONDS = Histogram(
+    "execution_duration_seconds",
+    "Approved execution duration in seconds.",
+    ("action",),
+    buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120),
 )
 
 
