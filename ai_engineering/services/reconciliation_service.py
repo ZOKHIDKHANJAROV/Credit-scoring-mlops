@@ -55,7 +55,7 @@ class ReconciliationService:
         return recovered
 
     def retry_if_absent(self, approval_id: str) -> ApprovalRequest:
-        """Retry an UNKNOWN execution only after reconciliation proves the Job is absent."""
+        """Retry UNKNOWN execution only after a fresh read confirms Job absence."""
         approval = self.store.get(approval_id)
         if approval is None:
             raise KeyError(f"Approval not found: {approval_id}")
@@ -82,7 +82,7 @@ class ReconciliationService:
             status="retrying",
             payload=result,
         )
-        self.store.mark_executing(approval_id)
+        self.store.mark_retry_executing(approval_id)
         try:
             execution = self.executor.apply_training_job(approved=True, execution_id=approval_id)
         except Exception as exc:
