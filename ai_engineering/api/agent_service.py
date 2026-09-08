@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
@@ -84,10 +86,7 @@ def build_agent() -> ToolCallingAgent:
 
 def build_orchestrator() -> OrchestratorAgent:
     """Build the reasoning layer without exposing infrastructure mutation."""
-    return OrchestratorAgent(
-        tools=build_default_registry()._tools.values(),
-        llm_provider=OpenAICompatibleProvider(),
-    )
+    return OrchestratorAgent(llm_provider=OpenAICompatibleProvider())
 
 
 @app.get("/health")
@@ -123,18 +122,15 @@ def run_agent(request: AgentRunRequest) -> AgentRunResponse:
 @app.post("/api/v1/agent/decision", response_model=AgentDecisionResponse, dependencies=[Depends(authenticated)])
 def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionResponse:
     """Turn an LLM recommendation into an approval request without executing it."""
+    trace_id = str(request.context.get("trace_id") or request.context.get("event_id") or uuid4())
     try:
         decision: AgentDecision = build_orchestrator().reason(request.task, request.context)
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Agent decision failed") from exc
 
-    trace_id = request.context.get("trace_id") or request.context.get("event_id") or decision.parameters.get("trace_id")
-    trace_id = str(trace_id) if trace_id else None
-
-    audit_trace_id = trace_id or "agent-decision"
     audit_service.record(
         AuditEventType.DECISION_CREATED,
-        trace_id=audit_trace_id,
+        trace_id=trace_id,
         action=decision.action,
         status=decision.status.value,
         payload={
@@ -161,7 +157,7 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
         approval_id = approval.approval_id
         audit_service.record(
             AuditEventType.APPROVAL_REQUESTED,
-            trace_id=approval.approval_id,
+            trace_id=approval_id,
             action=approval.action,
             status=approval.status.value,
             payload={"reason": approval.reason, "execution_plan": approval.execution_plan},
@@ -172,7 +168,7 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
         reason=decision.reason,
         requires_human_approval=decision.requires_human_approval,
         parameters=decision.parameters,
-        trace_id=audit_trace_id,
+        trace_id=trace_id,
         approval_id=approval_id,
     )
 
