@@ -15,6 +15,9 @@ class KubernetesExecutionUnknown(TimeoutError):
 class KubernetesExecutor:
     """Execute only the allowlisted training Job manifest after approval."""
 
+    JOB_ID_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+    JOB_NAME_RE = re.compile(r"^credit-training-[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")
+
     def __init__(
         self,
         manifest_path: str | Path = "k8s/jobs/model-training-job.yaml",
@@ -23,12 +26,21 @@ class KubernetesExecutor:
         self.manifest_path = Path(manifest_path)
         self.namespace = namespace
 
-    @staticmethod
-    def _job_name(execution_id: str | None) -> str:
+    @classmethod
+    def _job_name(cls, execution_id: str | None) -> str:
         if not execution_id:
             return "credit-model-training"
-        safe_id = re.sub(r"[^a-z0-9-]", "-", execution_id.lower()).strip("-")[:50]
+        safe_id = execution_id.lower().strip()
+        if not cls.JOB_ID_RE.fullmatch(safe_id):
+            raise ValueError(
+                "execution_id must be a DNS-1123-safe identifier of 1-40 lowercase characters"
+            )
         return f"credit-training-{safe_id}"
+
+    @classmethod
+    def _validate_job_name(cls, job_name: str) -> None:
+        if not cls.JOB_NAME_RE.fullmatch(job_name):
+            raise ValueError("job_name must refer to an ai-engineering credit-training Job")
 
     def _render_manifest(self, execution_id: str | None) -> str:
         manifest = self.manifest_path.read_text(encoding="utf-8")
@@ -48,7 +60,11 @@ class KubernetesExecutor:
 
     def apply_training_job(self, approved: bool, execution_id: str | None = None) -> dict[str, Any]:
         if not approved:
-            return {"executed": False, "action": "create_training_job", "reason": "Human approval is required"}
+            return {
+                "executed": False,
+                "action": "create_training_job",
+                "reason": "Human approval is required",
+            }
         if self.namespace != "ai-engineering":
             raise PermissionError("Training execution is restricted to ai-engineering namespace")
         if not self.manifest_path.exists():
@@ -67,10 +83,18 @@ class KubernetesExecutor:
             )
         except subprocess.TimeoutExpired as exc:
             raise KubernetesExecutionUnknown("kubectl timed out; execution outcome is unknown") from exc
-        except FileNotFoundError as exc:
-            return {"executed": False, "action": "create_training_job", "reason": "kubectl is not installed or not available on PATH", "error": str(exc)}
-        except subprocess.CalledProcessError as exc:
-            return {"executed": False, "action": "create_training_job", "reason": "kubectl command failed", "stdout": exc.stdout, "stderr": exc.stderr}
+        except FileNotFoundError:
+            return {
+                "executed": False,
+                "action": "create_training_job",
+                "reason": "kubectl is not installed or not available on PATH",
+            }
+        except subprocess.CalledProcessError:
+            return {
+                "executed": False,
+                "action": "create_training_job",
+                "reason": "kubectl command failed",
+            }
 
         return {
             "executed": True,
@@ -83,9 +107,10 @@ class KubernetesExecutor:
         }
 
     def get_training_job_status(self, job_name: str) -> dict[str, Any]:
-        """Read-only reconciliation check for an existing Job."""
+        """Read-only reconciliation check for an existing training Job."""
         if self.namespace != "ai-engineering":
             raise PermissionError("Training reconciliation is restricted to ai-engineering namespace")
+        self._validate_job_name(job_name)
         try:
             completed = subprocess.run(
                 ["kubectl", "get", "job", job_name, "--namespace", self.namespace, "-o", "json"],
@@ -96,13 +121,14 @@ class KubernetesExecutor:
             )
         except subprocess.TimeoutExpired as exc:
             raise KubernetesExecutionUnknown("kubectl status check timed out") from exc
-        except FileNotFoundError as exc:
-            return {"exists": False, "status": "unknown", "error": str(exc)}
+        except FileNotFoundError:
+            return {"exists": False, "status": "unknown", "error": "kubectl is not available"}
 
         if completed.returncode != 0:
-            return {"exists": False, "status": "absent", "stderr": completed.stderr.strip()}
+            return {"exists": False, "status": "absent"}
 
         import json
+
         data = json.loads(completed.stdout)
         status = data.get("status", {})
         if status.get("completionTime"):
