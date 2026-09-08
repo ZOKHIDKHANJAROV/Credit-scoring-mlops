@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ai_engineering.api.security import api_auth
@@ -45,9 +45,9 @@ class ApprovalCreateRequest(BaseModel):
     execution_plan: dict = Field(default_factory=dict)
 
 
-def authenticated() -> None:
+def authenticated(authorization: str | None = Header(default=None)) -> None:
     """Dependency used on every non-health API endpoint."""
-    api_auth.require()
+    api_auth.require(authorization)
 
 
 def build_agent() -> ToolCallingAgent:
