@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -14,9 +15,36 @@ class KubernetesExecutionUnknown(TimeoutError):
 class KubernetesExecutor:
     """Execute only the allowlisted training Job manifest after approval."""
 
-    def __init__(self, manifest_path: str | Path = "k8s/jobs/model-training-job.yaml", namespace: str = "ai-engineering") -> None:
+    def __init__(
+        self,
+        manifest_path: str | Path = "k8s/jobs/model-training-job.yaml",
+        namespace: str = "ai-engineering",
+    ) -> None:
         self.manifest_path = Path(manifest_path)
         self.namespace = namespace
+
+    @staticmethod
+    def _job_name(execution_id: str | None) -> str:
+        if not execution_id:
+            return "credit-model-training"
+        safe_id = re.sub(r"[^a-z0-9-]", "-", execution_id.lower()).strip("-")[:50]
+        return f"credit-training-{safe_id}"
+
+    def _render_manifest(self, execution_id: str | None) -> str:
+        manifest = self.manifest_path.read_text(encoding="utf-8")
+        if execution_id is None:
+            return manifest
+        job_name = self._job_name(execution_id)
+        rendered, replacements = re.subn(
+            r"(^\s*name:\s*)credit-model-training(\s*$)",
+            rf"\g<1>{job_name}\g<2>",
+            manifest,
+            count=1,
+            flags=re.MULTILINE,
+        )
+        if replacements != 1:
+            raise ValueError("Training manifest must contain metadata.name=credit-model-training")
+        return rendered
 
     def apply_training_job(self, approved: bool, execution_id: str | None = None) -> dict[str, Any]:
         if not approved:
@@ -26,9 +54,17 @@ class KubernetesExecutor:
         if not self.manifest_path.exists():
             raise FileNotFoundError(f"Training manifest not found: {self.manifest_path}")
 
-        command = ["kubectl", "apply", "-f", str(self.manifest_path), "--namespace", self.namespace]
+        job_name = self._job_name(execution_id)
+        command = ["kubectl", "apply", "-f", "-", "--namespace", self.namespace]
         try:
-            completed = subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
+            completed = subprocess.run(
+                command,
+                input=self._render_manifest(execution_id),
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
         except subprocess.TimeoutExpired as exc:
             raise KubernetesExecutionUnknown("kubectl timed out; execution outcome is unknown") from exc
         except FileNotFoundError as exc:
@@ -36,7 +72,15 @@ class KubernetesExecutor:
         except subprocess.CalledProcessError as exc:
             return {"executed": False, "action": "create_training_job", "reason": "kubectl command failed", "stdout": exc.stdout, "stderr": exc.stderr}
 
-        return {"executed": True, "action": "create_training_job", "namespace": self.namespace, "manifest_path": str(self.manifest_path), "execution_id": execution_id, "stdout": completed.stdout.strip()}
+        return {
+            "executed": True,
+            "action": "create_training_job",
+            "namespace": self.namespace,
+            "job_name": job_name,
+            "manifest_path": str(self.manifest_path),
+            "execution_id": execution_id,
+            "stdout": completed.stdout.strip(),
+        }
 
     def get_training_job_status(self, job_name: str) -> dict[str, Any]:
         """Read-only reconciliation check for an existing Job."""
@@ -45,7 +89,10 @@ class KubernetesExecutor:
         try:
             completed = subprocess.run(
                 ["kubectl", "get", "job", job_name, "--namespace", self.namespace, "-o", "json"],
-                check=False, capture_output=True, text=True, timeout=30,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
         except subprocess.TimeoutExpired as exc:
             raise KubernetesExecutionUnknown("kubectl status check timed out") from exc
