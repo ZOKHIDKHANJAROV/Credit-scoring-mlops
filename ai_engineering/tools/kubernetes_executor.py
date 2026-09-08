@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -27,9 +28,7 @@ class KubernetesExecutor:
         self.namespace = namespace
 
     @classmethod
-    def _job_name(cls, execution_id: str | None) -> str:
-        if not execution_id:
-            return "credit-model-training"
+    def _job_name(cls, execution_id: str) -> str:
         safe_id = execution_id.lower().strip()
         if not cls.JOB_ID_RE.fullmatch(safe_id):
             raise ValueError(
@@ -42,10 +41,8 @@ class KubernetesExecutor:
         if not cls.JOB_NAME_RE.fullmatch(job_name):
             raise ValueError("job_name must refer to an ai-engineering credit-training Job")
 
-    def _render_manifest(self, execution_id: str | None) -> str:
+    def _render_manifest(self, execution_id: str) -> str:
         manifest = self.manifest_path.read_text(encoding="utf-8")
-        if execution_id is None:
-            return manifest
         job_name = self._job_name(execution_id)
         rendered, replacements = re.subn(
             r"(^\s*name:\s*)credit-model-training(\s*$)",
@@ -67,11 +64,13 @@ class KubernetesExecutor:
             }
         if self.namespace != "ai-engineering":
             raise PermissionError("Training execution is restricted to ai-engineering namespace")
+        if not execution_id:
+            raise ValueError("execution_id is required for approved training execution")
         if not self.manifest_path.exists():
             raise FileNotFoundError(f"Training manifest not found: {self.manifest_path}")
 
         job_name = self._job_name(execution_id)
-        command = ["kubectl", "apply", "-f", "-", "--namespace", self.namespace]
+        command = ["kubectl", "apply", "-f", "-", "--namespace", "ai-engineering"]
         try:
             completed = subprocess.run(
                 command,
@@ -99,7 +98,7 @@ class KubernetesExecutor:
         return {
             "executed": True,
             "action": "create_training_job",
-            "namespace": self.namespace,
+            "namespace": "ai-engineering",
             "job_name": job_name,
             "manifest_path": str(self.manifest_path),
             "execution_id": execution_id,
@@ -113,7 +112,7 @@ class KubernetesExecutor:
         self._validate_job_name(job_name)
         try:
             completed = subprocess.run(
-                ["kubectl", "get", "job", job_name, "--namespace", self.namespace, "-o", "json"],
+                ["kubectl", "get", "job", job_name, "--namespace", "ai-engineering", "-o", "json"],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -126,8 +125,6 @@ class KubernetesExecutor:
 
         if completed.returncode != 0:
             return {"exists": False, "status": "absent"}
-
-        import json
 
         data = json.loads(completed.stdout)
         status = data.get("status", {})
