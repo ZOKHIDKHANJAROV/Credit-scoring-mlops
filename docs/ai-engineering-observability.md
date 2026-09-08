@@ -13,6 +13,7 @@ The AI Engineering Command Center exposes Prometheus-compatible metrics at `GET 
 | `agent_tool_duration_seconds` | Tool execution latency |
 | `approval_requests_total` | Human approval requests grouped by action |
 | `execution_total` | Approved executions grouped by action and status |
+| `execution_duration_seconds` | Approved execution latency grouped by action |
 | `execution_unknown_total` | Executions whose outcome is unknown |
 | `execution_retry_total` | Retries started after reconciliation confirmed Job absence |
 
