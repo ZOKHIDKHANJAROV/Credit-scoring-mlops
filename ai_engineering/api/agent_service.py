@@ -276,6 +276,17 @@ def reconcile_approval(approval_id: str) -> ApprovalRequest:
         raise HTTPException(status_code=503, detail="Reconciliation outcome is unknown") from exc
 
 
+@app.post("/api/v1/approvals/{approval_id}/retry", response_model=ApprovalRequest, dependencies=[Depends(authenticated)])
+def retry_approval(approval_id: str) -> ApprovalRequest:
+    """Retry an UNKNOWN execution only when reconciliation proves the Job is absent."""
+    try:
+        return reconciliation_service.retry_if_absent(approval_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Approval not found") from exc
+    except KubernetesExecutionUnknown as exc:
+        raise HTTPException(status_code=503, detail="Retry outcome is unknown") from exc
+
+
 @app.get("/api/v1/audit/events", response_model=list[AuditEvent], dependencies=[Depends(authenticated)])
 def list_audit_events(
     trace_id: str | None = Query(default=None),
