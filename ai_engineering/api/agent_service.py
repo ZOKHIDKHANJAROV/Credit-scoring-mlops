@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
+from ai_engineering.agents.orchestrator import OrchestratorAgent
 from ai_engineering.api.security import api_auth
 from ai_engineering.llm.provider import OpenAICompatibleProvider
 from ai_engineering.llm.tool_calling import ToolCallingAgent
@@ -17,6 +18,7 @@ from ai_engineering.observability import (
 )
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest
 from ai_engineering.schemas.audit import AuditEvent, AuditEventType
+from ai_engineering.schemas.decisions import AgentDecision
 from ai_engineering.services.audit_service import AuditService
 from ai_engineering.services.reconciliation_service import ReconciliationService
 from ai_engineering.storage.approval_store import ApprovalStore
@@ -27,7 +29,7 @@ from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown,
 
 ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
-app = FastAPI(title="AI Engineering Command Center Agent", version="0.7.0")
+app = FastAPI(title="AI Engineering Command Center Agent", version="0.8.0")
 approval_store = ApprovalStore()
 audit_store = AuditStore()
 audit_service = AuditService(audit_store)
@@ -44,6 +46,20 @@ class AgentRunResponse(BaseModel):
     answer: str
     tools_used: list[str] = Field(default_factory=list)
     trace_id: str
+
+
+class AgentDecisionRequest(BaseModel):
+    task: str = Field(min_length=1, max_length=4000)
+    context: dict = Field(default_factory=dict)
+
+
+class AgentDecisionResponse(BaseModel):
+    decision: str
+    reason: str
+    requires_human_approval: bool
+    parameters: dict = Field(default_factory=dict)
+    trace_id: str
+    approval_id: str | None = None
 
 
 class ApprovalCreateRequest(BaseModel):
@@ -63,6 +79,14 @@ def build_agent() -> ToolCallingAgent:
         registry=build_default_registry(),
         max_rounds=4,
         audit_service=audit_service,
+    )
+
+
+def build_orchestrator() -> OrchestratorAgent:
+    """Build the reasoning layer without exposing infrastructure mutation."""
+    return OrchestratorAgent(
+        tools=build_default_registry()._tools.values(),
+        llm_provider=OpenAICompatibleProvider(),
     )
 
 
@@ -93,6 +117,63 @@ def run_agent(request: AgentRunRequest) -> AgentRunResponse:
         answer=str(result.get("answer", "")),
         tools_used=list(result.get("tools_used", [])),
         trace_id=str(result["trace_id"]),
+    )
+
+
+@app.post("/api/v1/agent/decision", response_model=AgentDecisionResponse, dependencies=[Depends(authenticated)])
+def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionResponse:
+    """Turn an LLM recommendation into an approval request without executing it."""
+    try:
+        decision: AgentDecision = build_orchestrator().reason(request.task, request.context)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Agent decision failed") from exc
+
+    trace_id = request.context.get("trace_id") or request.context.get("event_id") or decision.parameters.get("trace_id")
+    trace_id = str(trace_id) if trace_id else None
+
+    audit_trace_id = trace_id or "agent-decision"
+    audit_service.record(
+        AuditEventType.DECISION_CREATED,
+        trace_id=audit_trace_id,
+        action=decision.action,
+        status=decision.status.value,
+        payload={
+            "reason": decision.reason,
+            "parameters": decision.parameters,
+            "requires_human_approval": decision.requires_human_approval,
+        },
+    )
+
+    approval_id: str | None = None
+    if decision.action == "propose_retraining":
+        approval = ApprovalRequest(
+            action="create_training_job",
+            reason=decision.reason,
+            execution_plan={
+                "source": "agent_decision",
+                "decision": decision.action,
+                "parameters": decision.parameters,
+                "context": request.context,
+            },
+        )
+        approval_store.create(approval)
+        APPROVAL_REQUESTS_TOTAL.labels(action=approval.action).inc()
+        approval_id = approval.approval_id
+        audit_service.record(
+            AuditEventType.APPROVAL_REQUESTED,
+            trace_id=approval.approval_id,
+            action=approval.action,
+            status=approval.status.value,
+            payload={"reason": approval.reason, "execution_plan": approval.execution_plan},
+        )
+
+    return AgentDecisionResponse(
+        decision=decision.action,
+        reason=decision.reason,
+        requires_human_approval=decision.requires_human_approval,
+        parameters=decision.parameters,
+        trace_id=audit_trace_id,
+        approval_id=approval_id,
     )
 
 
