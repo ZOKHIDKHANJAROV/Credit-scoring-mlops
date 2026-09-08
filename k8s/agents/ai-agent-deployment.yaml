@@ -17,10 +17,19 @@ spec:
         app.kubernetes.io/name: ai-engineering-agent
         app.kubernetes.io/component: agent
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: agent
           image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-06fed5e
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command:
             - uvicorn
             - ai_engineering.api.agent_service:app
@@ -32,6 +41,11 @@ spec:
             - name: http
               containerPort: 8010
           env:
+            - name: AI_ENGINEERING_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ai-engineering-api
+                  key: AI_ENGINEERING_API_TOKEN
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow:5000"
             - name: MLFLOW_EXPERIMENT_NAME
