@@ -1,0 +1,108 @@
+{
+  "uid": "ai-engineering-command-center",
+  "title": "AI Engineering Command Center",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Agent Runs",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(agent_runs_total)", "legendFormat": "runs"}]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Agent Failures",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(agent_run_failures_total)", "legendFormat": "failures"}]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Approval Requests",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(approval_requests_total)", "legendFormat": "approvals"}]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Unknown Executions",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(execution_unknown_total)", "legendFormat": "unknown"}]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Agent Run Rate",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(agent_runs_total[5m])) by (status)", "legendFormat": "{{status}}"}]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Agent Run Latency",
+      "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(agent_run_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95"}]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Tool Call Rate",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(agent_tool_calls_total[5m])) by (tool, status)", "legendFormat": "{{tool}} / {{status}}"}]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Tool Latency p95",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(agent_tool_duration_seconds_bucket[5m])) by (le, tool))", "legendFormat": "{{tool}}"}]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Execution Results",
+      "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+      "targets": [{"expr": "sum(rate(execution_total[5m])) by (action, status)", "legendFormat": "{{action}} / {{status}}"}]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Execution Latency p95",
+      "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(execution_duration_seconds_bucket[5m])) by (le, action))", "legendFormat": "{{action}}"}]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Execution Retries",
+      "gridPos": {"x": 0, "y": 28, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(execution_retry_total)", "legendFormat": "retries"}]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Tool Error Rate",
+      "gridPos": {"x": 6, "y": 28, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(rate(agent_tool_calls_total{status=\"failed\"}[5m])) / clamp_min(sum(rate(agent_tool_calls_total[5m])), 0.001)", "legendFormat": "error rate"}]
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Execution Unknown Rate",
+      "gridPos": {"x": 12, "y": 28, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(rate(execution_unknown_total[5m]))", "legendFormat": "unknown/sec"}]
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Successful Execution Rate",
+      "gridPos": {"x": 18, "y": 28, "w": 6, "h": 4},
+      "targets": [{"expr": "sum(rate(execution_total{status=\"completed\"}[5m]))", "legendFormat": "completed/sec"}]
+    }
+  ]
+}
