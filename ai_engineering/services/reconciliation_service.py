@@ -28,7 +28,7 @@ class ReconciliationService:
 
         self.audit_service.record(
             AuditEventType.EXECUTION_RECONCILIATION_STARTED,
-            trace_id=approval_id,
+            trace_id=approval.trace_id,
             action=approval.action,
             status=approval.status.value,
         )
@@ -48,7 +48,7 @@ class ReconciliationService:
 
         self.audit_service.record(
             AuditEventType.EXECUTION_RECONCILIATION_COMPLETED,
-            trace_id=approval_id,
+            trace_id=approval.trace_id,
             action=approval.action,
             status=recovered.status.value,
             payload=result,
@@ -66,7 +66,7 @@ class ReconciliationService:
         job_name = f"credit-training-{approval_id}"
         self.audit_service.record(
             AuditEventType.EXECUTION_RECONCILIATION_STARTED,
-            trace_id=approval_id,
+            trace_id=approval.trace_id,
             action=approval.action,
             status=approval.status.value,
         )
@@ -78,16 +78,13 @@ class ReconciliationService:
 
         self.audit_service.record(
             AuditEventType.EXECUTION_RETRY,
-            trace_id=approval_id,
+            trace_id=approval.trace_id,
             action=approval.action,
             status="retrying",
             payload=result,
         )
         EXECUTION_RETRIES_TOTAL.labels(action=approval.action).inc()
 
-        # The Job existence check above is intentionally followed by an atomic
-        # row-locked state transition. If another retry request won the race,
-        # return the winner's state instead of turning a safe no-op into HTTP 500.
         try:
             self.store.mark_retry_executing(approval_id)
         except InvalidApprovalTransition:
