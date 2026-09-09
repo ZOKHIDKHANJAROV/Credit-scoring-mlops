@@ -22,6 +22,7 @@ class ApprovalRequestRow(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     approval_id: Mapped[str] = mapped_column(String(36), unique=True, index=True)
+    trace_id: Mapped[str] = mapped_column(String(36), index=True)
     action: Mapped[str] = mapped_column(String(200), index=True)
     reason: Mapped[str] = mapped_column(Text)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
@@ -34,7 +35,7 @@ class ApprovalRequestRow(Base):
 
     def to_schema(self) -> ApprovalRequest:
         return ApprovalRequest(
-            approval_id=self.approval_id, action=self.action, reason=self.reason,
+            approval_id=self.approval_id, trace_id=self.trace_id, action=self.action, reason=self.reason,
             requested_at=self.requested_at, status=ApprovalStatus(self.status),
             execution_plan=self.execution_plan or {}, decided_at=self.decided_at,
             decided_by=self.decided_by, decision_comment=self.decision_comment,
@@ -77,7 +78,7 @@ class ApprovalStore:
         if request.status != ApprovalStatus.PENDING:
             raise InvalidApprovalTransition("New approvals must start in pending state")
         row = ApprovalRequestRow(
-            approval_id=request.approval_id, action=request.action, reason=request.reason,
+            approval_id=request.approval_id, trace_id=request.trace_id, action=request.action, reason=request.reason,
             requested_at=request.requested_at, status=request.status.value,
             execution_plan=json.loads(json.dumps(request.execution_plan, default=str)),
         )
@@ -103,6 +104,7 @@ class ApprovalStore:
             return [row.to_schema() for row in rows]
 
     def _sync_request(self, request: ApprovalRequest, updated: ApprovalRequest) -> ApprovalRequest:
+        request.trace_id = updated.trace_id
         request.status = updated.status
         request.decided_at = updated.decided_at
         request.decided_by = updated.decided_by
