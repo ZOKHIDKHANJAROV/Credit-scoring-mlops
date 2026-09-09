@@ -141,14 +141,20 @@ class ToolCallingAgent:
                 try:
                     try:
                         arguments = json.loads(call.function.arguments or "{}")
-                    except json.JSONDecodeError:
-                        result = {"error": "Invalid JSON tool arguments"}
+                    except json.JSONDecodeError as exc:
+                        result = {"error": "Invalid JSON tool arguments", "detail": str(exc)}
                     else:
                         try:
                             result = self.registry.execute(name, arguments)
                             used_tools.append(name)
                         except (KeyError, TypeError, ValueError) as exc:
                             result = {"error": str(exc)}
+                        except Exception as exc:
+                            result = {
+                                "error": "Tool execution failed",
+                                "detail": str(exc),
+                                "error_type": type(exc).__name__,
+                            }
                 finally:
                     TOOL_DURATION_SECONDS.labels(tool=name).observe(time.perf_counter() - tool_started_at)
 
@@ -160,6 +166,7 @@ class ToolCallingAgent:
                     tool_name=name,
                     status=tool_status,
                     payload={"result": result},
+                    error=result.get("detail") if tool_status == "failed" else None,
                 )
                 messages.append(
                     {
