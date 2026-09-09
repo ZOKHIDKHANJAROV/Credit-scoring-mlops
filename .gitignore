@@ -1,10 +1,15 @@
 .venv/
 .env
+*.env
 __pycache__/
 *.pyc
 
-__pycache__/
-*.pyc
+# Local ML artifacts
 data/processed/
-
 catboost_info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
