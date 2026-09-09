@@ -8,7 +8,7 @@ from ai_engineering.observability import EXECUTION_RETRIES_TOTAL
 from ai_engineering.schemas.approvals import ApprovalRequest, ApprovalStatus
 from ai_engineering.schemas.audit import AuditEventType
 from ai_engineering.services.audit_service import AuditService
-from ai_engineering.storage.approval_store import ApprovalStore
+from ai_engineering.storage.approval_store import ApprovalStore, InvalidApprovalTransition
 
 
 class ReconciliationService:
@@ -84,7 +84,18 @@ class ReconciliationService:
             payload=result,
         )
         EXECUTION_RETRIES_TOTAL.labels(action=approval.action).inc()
-        self.store.mark_retry_executing(approval_id)
+
+        # The Job existence check above is intentionally followed by an atomic
+        # row-locked state transition. If another retry request won the race,
+        # return the winner's state instead of turning a safe no-op into HTTP 500.
+        try:
+            self.store.mark_retry_executing(approval_id)
+        except InvalidApprovalTransition:
+            current = self.store.get(approval_id)
+            if current is None:
+                raise KeyError(f"Approval not found: {approval_id}")
+            return current
+
         try:
             execution = self.executor.apply_training_job(approved=True, execution_id=approval_id)
         except Exception as exc:
