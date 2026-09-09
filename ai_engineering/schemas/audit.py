@@ -1,4 +1,4 @@
-"""Audit event contracts for the AI Engineering Command Center."""
+"""Audit event schemas for AI Engineering Command Center."""
 
 from __future__ import annotations
 
@@ -11,26 +11,31 @@ from pydantic import BaseModel, Field
 
 
 class AuditEventType(str, Enum):
-    AGENT_RUN_STARTED = "agent_run_started"
-    AGENT_RUN_COMPLETED = "agent_run_completed"
-    TOOL_CALL = "tool_call"
-    APPROVAL_CREATED = "approval_created"
+    AGENT_REQUESTED = "agent_requested"
+    TOOL_CALLED = "tool_called"
+    TOOL_RESULT = "tool_result"
+    DECISION_CREATED = "decision_created"
+    APPROVAL_REQUESTED = "approval_requested"
     APPROVAL_DECIDED = "approval_decided"
-    APPROVAL_EXECUTION_STARTED = "approval_execution_started"
-    APPROVAL_EXECUTION_COMPLETED = "approval_execution_completed"
-    APPROVAL_EXECUTION_FAILED = "approval_execution_failed"
+    EXECUTION_STARTED = "execution_started"
+    EXECUTION_UNKNOWN = "execution_unknown"
+    EXECUTION_RECONCILIATION_STARTED = "execution_reconciliation_started"
+    EXECUTION_RECONCILIATION_COMPLETED = "execution_reconciliation_completed"
+    EXECUTION_RETRY = "execution_retry"
+    EXECUTION_COMPLETED = "execution_completed"
+    EXECUTION_FAILED = "execution_failed"
 
 
 class AuditEvent(BaseModel):
-    """Immutable record of an important agent-control-plane transition."""
+    """Immutable event describing one observable agent operation."""
 
     event_id: str = Field(default_factory=lambda: str(uuid4()))
     event_type: AuditEventType
-    actor: str = "system"
-    correlation_id: str | None = None
-    approval_id: str | None = None
+    occurred_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    trace_id: str
+    actor: str = "ai-engineering-agent"
+    action: str | None = None
     tool_name: str | None = None
     status: str | None = None
-    message: str | None = None
-    data: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    payload: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None

@@ -1,258 +1,266 @@
-# Credit Scoring MLOps
+# Credit Scoring MLOps + AI Engineering Command Center
 
-Production-style end-to-end MLOps project for credit default prediction.
+Production-oriented MLOps platform for credit default prediction with an AI Engineering Command Center that can inspect model health, evaluate candidates, coordinate approvals, trace agent execution, and prepare controlled Kubernetes actions.
 
-This project demonstrates how a machine learning model can be trained, registered, deployed, monitored, explained, and used in both API-based and Kafka-based real-time scoring workflows.
+The project combines a classical ML production pipeline with an agentic engineering control plane. The AI layer is deliberately bounded: tools are allowlisted, mutating infrastructure actions require human approval, and execution state is persisted so repeated requests do not accidentally execute the same operation twice.
+
+> **Status:** active engineering project. The GPU-backed Kubernetes runtime is optional for development. Core application logic and tests are designed to run without a GPU.
 
 ---
 
-## Project Overview
+## What this project demonstrates
 
-The goal of this project is to predict credit default risk using classical machine learning models and build a production-style MLOps system around the model.
+### MLOps platform
 
-The project includes:
-
-- Data validation
-- Feature engineering
-- DVC pipeline
-- Model training with CatBoost, LightGBM and XGBoost
-- MLflow experiment tracking
-- MLflow Model Registry
+- Data validation and feature engineering
+- DVC pipeline orchestration
+- CatBoost, LightGBM and XGBoost training
+- MLflow experiment tracking and Model Registry
 - Champion model promotion
-- FastAPI inference service
+- FastAPI online scoring
 - PostgreSQL scoring logs
-- SHAP explainability
-- Evidently data drift monitoring
-- Retrain signal generation
-- Prometheus metrics
-- Grafana dashboard
-- Airflow batch and retraining pipelines
-- Kafka / Redpanda real-time scoring
-- Pytest unit tests
-- GitHub Actions CI
+- SHAP explanations
+- Evidently drift detection and retraining signals
+- Prometheus metrics and Grafana dashboards
+- Airflow batch and retraining workflows
+- Redpanda/Kafka real-time scoring
 - Docker Compose infrastructure
+- Pytest and GitHub Actions CI
+
+### AI Engineering Command Center
+
+- Bounded LLM tool-calling agent
+- Allowlisted read-only MLflow and monitoring tools
+- Structured engineering decisions
+- Reviewer/quality-gate workflow
+- Human approval for mutating actions
+- Kubernetes training-job planning and approval-gated execution
+- Agent execution tracing with `trace_id`
+- Audit events for agent/tool execution
+- PostgreSQL persistence for approvals and audit events
+- Idempotent approval/execution state transitions
+- Alembic database migrations
+- FastAPI endpoints for agent, approval and audit workflows
 
 ---
 
-## Architecture
+## High-level architecture
 
 ```text
-                    ┌──────────────────────┐
-                    │      Raw Data         │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │   Data Validation     │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │ Feature Engineering   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-        ┌──────────────────────────────────────────┐
-        │  Model Training                           │
-        │  CatBoost / LightGBM / XGBoost            │
-        └──────────┬───────────────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────────────────────────┐
-        │ MLflow Tracking + Model Registry          │
-        └──────────┬───────────────────────────────┘
-                   │
-                   ▼
-        ┌──────────────────────────────────────────┐
-        │ Champion Model Promotion                  │
-        │ CreditScoringCatBoost@champion            │
-        └──────────┬───────────────────────────────┘
-                   │
-       ┌───────────┴────────────────────────────┐
-       │                                        │
-       ▼                                        ▼
-┌──────────────────────┐              ┌──────────────────────┐
-│ FastAPI Scoring API   │              │ Kafka Consumer        │
-│ /score                │              │ Real-time scoring     │
-└──────────┬───────────┘              └──────────┬───────────┘
-           │                                     │
-           ▼                                     ▼
-┌─────────────────────────────────────────────────────────────┐
-│ PostgreSQL scoring_logs                                      │
-└──────────┬──────────────────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Prometheus + Grafana Monitoring                              │
-└──────────┬──────────────────────────────────────────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Airflow Batch Monitoring + Retraining Pipelines              │
-└─────────────────────────────────────────────────────────────┘
+                         CREDIT SCORING MLOPS PLATFORM
+
+ Raw Data
+    │
+    ▼
+Data Validation ──► Feature Engineering
+                         │
+                         ▼
+                Model Training
+             ┌────────┬────────┐
+             ▼        ▼        ▼
+         CatBoost  LightGBM  XGBoost
+             └────────┬────────┘
+                      ▼
+              MLflow Tracking
+                      │
+                      ▼
+               Model Registry
+                      │
+                      ▼
+             Champion Model
+                 @champion
+                      │
+          ┌───────────┴───────────┐
+          ▼                       ▼
+     FastAPI API            Redpanda/Kafka
+          │                       │
+          └───────────┬───────────┘
+                      ▼
+                PostgreSQL
+                      │
+             ┌────────┴────────┐
+             ▼                 ▼
+        Observability      Scoring Logs
+             │
+      Prometheus/Grafana
+
+
+                     AI ENGINEERING COMMAND CENTER
+
+             Monitoring / MLflow / Model Signals
+                         │
+                         ▼
+                  Orchestrator Agent
+                         │
+              ┌──────────┴──────────┐
+              ▼                     ▼
+        Read-only tools        LLM reasoning
+              │                     │
+              └──────────┬──────────┘
+                         ▼
+                    Decision
+                         │
+                ┌────────┴────────┐
+                │                 │
+          no mutation       mutation required
+                │                 │
+                ▼                 ▼
+             result          Human Approval
+                                  │
+                                  ▼
+                         PostgreSQL State
+                                  │
+                           Idempotent Guard
+                                  │
+                                  ▼
+                         Kubernetes Executor
+                                  │
+                                  ▼
+                           Training Job
+
+Every agent/tool execution can carry a trace ID and produce an audit event.
 ```
 
 ---
 
-## Tech Stack
+## AI Engineering safety model
 
-| Area | Tools |
-|---|---|
-| Language | Python |
-| Data Processing | Pandas, NumPy |
-| ML Models | CatBoost, LightGBM, XGBoost |
-| Experiment Tracking | MLflow |
-| Model Registry | MLflow Model Registry |
-| Pipeline Versioning | DVC |
-| API | FastAPI |
-| Database | PostgreSQL |
-| Object Storage | MinIO |
-| Monitoring | Prometheus, Grafana |
-| Drift Detection | Evidently |
-| Explainability | SHAP |
-| Orchestration | Apache Airflow |
-| Streaming | Redpanda / Kafka |
-| Testing | Pytest |
-| CI | GitHub Actions |
-| Infrastructure | Docker Compose |
+The agent is not a general-purpose shell with an LLM taped to it. Tools are explicitly registered and executed through an allowlist.
 
----
+```text
+LLM
+ │
+ ▼
+Tool Registry
+ │
+ ├── monitoring_get_retrain_signal       read-only
+ ├── mlflow_get_champion_model           read-only
+ ├── mlflow_compare_latest_models        read-only
+ └── Kubernetes training action         approval-gated
 
-## Main Features
+Mutation path:
 
-### Machine Learning
+request
+  ↓
+plan
+  ↓
+human approval
+  ↓
+atomic state transition
+  ↓
+idempotency check
+  ↓
+execution
+  ↓
+audit event
+```
 
-- Credit default prediction
-- CatBoost, LightGBM and XGBoost training
-- Model comparison by ROC-AUC
-- Champion model selection
-- MLflow experiment tracking
-- MLflow Model Registry
-- Champion model alias
-
-### API Serving
-
-- FastAPI inference endpoint
-- Credit score calculation
-- Risk level classification
-- Decision logic:
-  - `approved`
-  - `manual_review`
-  - `rejected`
-- PostgreSQL scoring logs
-- SHAP local explanations for each prediction
-
-### Kafka Real-time Scoring
-
-- Kafka-compatible Redpanda broker
-- `credit_applications` topic
-- `scoring_results` topic
-- Producer script for generating credit applications
-- Dockerized Kafka consumer
-- Real-time scoring using MLflow champion model
-- Results written to PostgreSQL and Kafka
-
-### Monitoring
-
-- Prometheus metrics
-- Grafana dashboard
-- API request metrics
-- Error metrics
-- Latency metrics
-- Decision distribution
-- Risk level distribution
-- Retrain required signal
-
-### Airflow
-
-- Batch monitoring DAG
-- Full retraining DAG
-- Data validation
-- Feature engineering
-- Drift report generation
-- SHAP report generation
-- Model retraining pipeline
+The system is designed so an LLM cannot directly issue arbitrary `kubectl`, database, shell, or infrastructure commands.
 
 ---
 
-## Project Structure
+## Approval state machine
+
+Approval records use an explicit state machine:
+
+```text
+                 ┌──────────────┐
+                 │    PENDING   │
+                 └──────┬───────┘
+                        │
+              ┌─────────┴─────────┐
+              ▼                   ▼
+          APPROVED             REJECTED
+              │
+              ▼
+          EXECUTING
+          │       │
+          ▼       ▼
+     COMPLETED   FAILED
+```
+
+Execution is guarded by a database-backed state transition so two concurrent requests cannot both move the same approval into execution.
+
+---
+
+## Persistence and idempotency
+
+The AI Engineering layer uses PostgreSQL for durable control-plane state.
+
+### Approval persistence
+
+Stores approval requests, status, timestamps, decision metadata and execution information.
+
+### Audit persistence
+
+Stores agent/tool events including:
+
+- event ID
+- event type
+- timestamp
+- trace ID
+- actor
+- action
+- tool name
+- status
+- structured payload
+- error information
+
+### Migrations
+
+Database schema changes are managed with Alembic:
+
+```text
+alembic.ini
+migrations/
+├── env.py
+├── script.py.mako
+└── versions/
+    └── 20260819_0001_ai_engineering_persistence.py
+```
+
+Typical migration commands:
+
+```bash
+alembic upgrade head
+alembic current
+alembic history
+```
+
+Production schema evolution should go through migrations rather than relying on application startup to create tables.
+
+---
+
+## Main repository structure
 
 ```text
 Credit-scoring-mlops/
 │
-├── configs/
-│   └── feature_config.json
+├── ai_engineering/
+│   ├── agents/              # agent roles and orchestration
+│   ├── api/                 # AI Engineering FastAPI service
+│   ├── llm/                 # provider and tool-calling loop
+│   ├── policies/            # model/action policies
+│   ├── schemas/             # typed domain contracts
+│   ├── services/            # audit and execution services
+│   ├── storage/             # approval/audit persistence
+│   ├── tools/               # allowlisted engineering tools
+│   └── workflows/           # controlled engineering workflows
 │
-├── dags/
-│   ├── credit_scoring_batch_pipeline.py
-│   └── credit_scoring_retraining_pipeline.py
+├── migrations/              # Alembic migrations
+├── docs/                    # engineering architecture notes
 │
-├── data/
-│   ├── raw/
-│   └── processed/
+├── configs/                 # feature configuration
+├── dags/                    # Airflow pipelines
+├── monitoring/              # Prometheus/Grafana configuration
+├── scripts/                 # operational and Kafka scripts
+├── services/                # credit scoring API and consumer
+├── src/                     # ML/data/training/monitoring code
+├── tests/                   # unit and integration-oriented tests
 │
-├── monitoring/
-│   ├── prometheus/
-│   │   └── prometheus.yml
-│   └── grafana/
-│       ├── provisioning/
-│       └── dashboards/
-│
-├── reports/
-│   ├── data_drift_report.html
-│   ├── retrain_signal.json
-│   ├── shap_summary.html
-│   └── shap_summary.png
-│
-├── scripts/
-│   ├── restore_german_credit_data.py
-│   ├── generate_scoring_logs.py
-│   ├── kafka_producer.py
-│   └── kafka_consume_results.py
-│
-├── services/
-│   ├── api/
-│   │   ├── main.py
-│   │   ├── schemas.py
-│   │   ├── scoring.py
-│   │   ├── explainability.py
-│   │   ├── metrics.py
-│   │   ├── model_loader.py
-│   │   └── db/
-│   │       ├── database.py
-│   │       ├── models.py
-│   │       └── repository.py
-│   │
-│   └── kafka_consumer/
-│       └── scoring_consumer.py
-│
-├── src/
-│   ├── data/
-│   │   ├── schema.py
-│   │   └── validate_data.py
-│   │
-│   ├── features/
-│   │   └── build_features.py
-│   │
-│   ├── training/
-│   │   ├── train_catboost.py
-│   │   ├── train_lightgbm.py
-│   │   ├── train_xgboost.py
-│   │   ├── select_best_model.py
-│   │   └── promote_model.py
-│   │
-│   ├── monitoring/
-│   │   └── drift_report.py
-│   │
-│   └── explainability/
-│       └── shap_report.py
-│
-├── tests/
-│   └── test_scoring.py
-│
-├── docker-compose.yml
-├── Dockerfile
-├── Dockerfile.kafka
+├── k8s/                     # Kubernetes manifests
+├── docker-compose.yml       # local infrastructure
+├── Dockerfile               # scoring service image
 ├── requirements.txt
 ├── requirements-airflow.txt
 ├── requirements-kafka.txt
@@ -264,124 +272,68 @@ Credit-scoring-mlops/
 
 ---
 
-## Model Results
+## AI Engineering API
 
-Best model: **CatBoost**
+The AI Engineering service exposes the control-plane API.
 
-| Model | ROC-AUC | Gini | Accuracy | F1 |
-|---|---:|---:|---:|---:|
-| CatBoost | 0.8139 | 0.6279 | 0.7400 | 0.6232 |
-| LightGBM | 0.7669 | 0.5338 | 0.7150 | 0.5649 |
-| XGBoost | 0.8038 | 0.6076 | 0.7650 | 0.6179 |
+### Health
 
-Champion model:
-
-```text
-CreditScoringCatBoost@champion
+```http
+GET /health
 ```
+
+### Registered tools
+
+```http
+GET /api/v1/agent/tools
+```
+
+### Run the agent
+
+```http
+POST /api/v1/agent/run
+Content-Type: application/json
+```
+
+Example request:
+
+```json
+{
+  "task": "Check whether the current model should be retrained."
+}
+```
+
+The agent returns a structured response containing status, final answer and tools used.
+
+Mutating workflows are designed to stop at the approval boundary rather than silently executing infrastructure changes.
 
 ---
 
-## Services
-
-After running Docker Compose, the following services are available:
-
-Docker Compose publishes project ports on `127.0.0.1` by default, so services are reachable from the local machine but are not exposed on external network interfaces. If a local port conflicts with another project, copy `.env.example` to `.env` and change the corresponding `*_HOST_PORT` value.
-
-| Service | URL |
-|---|---|
-| FastAPI Swagger | http://127.0.0.1:8000/docs |
-| FastAPI Metrics | http://127.0.0.1:8000/metrics |
-| MLflow UI | http://127.0.0.1:5000 |
-| MinIO Console | http://127.0.0.1:9001 |
-| Prometheus | http://127.0.0.1:9090 |
-| Grafana | http://127.0.0.1:3000 |
-| Airflow | http://127.0.0.1:8080 |
-| Kafka UI | http://127.0.0.1:8081 |
-| PostgreSQL | 127.0.0.1:55432 |
-
-Default credentials:
-
-| Service | Username | Password |
-|---|---|---|
-| Grafana | admin | admin |
-| Airflow | admin | admin |
-| MinIO | minio | minio123 |
-
----
-
-## Quick Start
-
-### 1. Clone repository
-
-```bash
-git clone https://github.com/ZOKHIDKHANJAROV/Credit-scoring-mlops.git
-cd Credit-scoring-mlops
-```
-
-### 2. Create virtual environment
-
-```bash
-python -m venv .venv
-```
-
-Windows PowerShell:
-
-```powershell
-.\.venv\Scripts\activate
-```
-
-Linux / macOS:
-
-```bash
-source .venv/bin/activate
-```
-
-### 3. Install dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Start infrastructure
-
-```bash
-docker compose up -d --build
-```
-
-### 5. Restore dataset
-
-```bash
-python -m scripts.restore_german_credit_data
-```
-
-### 6. Run DVC pipeline
-
-```bash
-dvc repro
-```
-
----
-
-## DVC Pipeline
-
-The project uses DVC to reproduce the full ML workflow.
-
-Main stages:
+## Core ML workflow
 
 ```text
 validate_data
+      ↓
 build_features
-train_catboost
-train_lightgbm
-train_xgboost
-select_best_model
-promote_model
-drift_report
-shap_report
+      ↓
+train_catboost ─┐
+train_lightgbm ─┼─► select_best_model
+train_xgboost ─┘          │
+                           ▼
+                    promote_model
+                           │
+                           ▼
+                    MLflow champion
+                           │
+                 ┌─────────┴─────────┐
+                 ▼                   ▼
+            online scoring      monitoring
+                                     │
+                                     ▼
+                              retrain signal
 ```
 
-Run full pipeline:
+Run the DVC pipeline:
 
 ```bash
 dvc repro
@@ -395,493 +347,119 @@ dvc repro train_catboost
 
 ---
 
-## FastAPI Scoring API
+## Model results
 
-Open Swagger UI:
+Current reference results from the project benchmark:
+
+| Model | ROC-AUC | Gini | Accuracy | F1 |
+|---|---:|---:|---:|---:|
+| CatBoost | 0.8139 | 0.6279 | 0.7400 | 0.6232 |
+| LightGBM | 0.7669 | 0.5338 | 0.7150 | 0.5649 |
+| XGBoost | 0.8038 | 0.6076 | 0.7650 | 0.6179 |
+
+Champion model:
 
 ```text
-http://127.0.0.1:8000/docs
+CreditScoringCatBoost@champion
 ```
 
-Endpoint:
-
-```text
-POST /score
-```
-
-Example response:
-
-```json
-{
-  "default_probability": 0.6456,
-  "score": 495,
-  "risk_level": "high",
-  "decision": "rejected",
-  "model_name": "CreditScoringCatBoost",
-  "top_reasons": [
-    {
-      "feature": "duration_months",
-      "value": 1,
-      "shap_value": -0.6403,
-      "impact": "decreased_risk"
-    },
-    {
-      "feature": "checking_account_status",
-      "value": 1,
-      "shap_value": 0.5301,
-      "impact": "increased_risk"
-    },
-    {
-      "feature": "other_installment_plans",
-      "value": 1,
-      "shap_value": 0.4834,
-      "impact": "increased_risk"
-    }
-  ]
-}
-```
-
-The API returns:
-
-| Field | Meaning |
-|---|---|
-| `default_probability` | Probability of default |
-| `score` | Credit score from 300 to 850 |
-| `risk_level` | low / medium / high / very_high |
-| `decision` | approved / manual_review / rejected |
-| `top_reasons` | SHAP-based local explanation |
+These numbers are reference benchmark results, not a guarantee of current production performance. Production decisions should be based on the metrics recorded in MLflow for the deployed model version.
 
 ---
 
-## Scoring Logs
+## Observability
 
-Every API and Kafka prediction is saved into PostgreSQL table:
-
-```text
-scoring_logs
-```
-
-Check latest scoring logs through API:
-
-```text
-http://127.0.0.1:8000/scoring-logs
-```
-
-Or through PostgreSQL:
-
-```bash
-docker exec -it credit_scoring_postgres psql -U mlflow -d mlflow
-```
-
-```sql
-SELECT id, age, credit_amount, default_probability, score, risk_level, decision, created_at
-FROM scoring_logs
-ORDER BY created_at DESC
-LIMIT 5;
-```
-
----
-
-## Kafka Real-time Scoring
-
-This project includes Kafka-compatible real-time scoring using Redpanda.
-
-Topics:
-
-```text
-credit_applications
-scoring_results
-```
-
-Flow:
-
-```text
-kafka_producer.py
-      ↓
-credit_applications topic
-      ↓
-kafka-consumer Docker service
-      ↓
-MLflow champion model
-      ↓
-PostgreSQL scoring_logs
-      ↓
-scoring_results topic
-```
-
-### Start Kafka services
-
-```bash
-docker compose up -d redpanda kafka-ui kafka-consumer
-```
-
-### Create topics
-
-```bash
-docker exec -it credit_scoring_redpanda rpk topic create credit_applications
-docker exec -it credit_scoring_redpanda rpk topic create scoring_results
-```
-
-List topics:
-
-```bash
-docker exec -it credit_scoring_redpanda rpk topic list
-```
-
-### Send applications to Kafka
-
-```bash
-python -m scripts.kafka_producer
-```
-
-### Read scoring results from terminal
-
-```bash
-python -m scripts.kafka_consume_results
-```
-
-### Kafka UI
-
-```text
-http://127.0.0.1:8081
-```
-
-Check:
-
-```text
-Topics → scoring_results → Messages
-```
-
----
-
-## Airflow Pipelines
-
-Airflow UI:
-
-```text
-http://127.0.0.1:8080
-```
-
-Login:
-
-```text
-admin / admin
-```
-
-### Batch Monitoring DAG
-
-```text
-credit_scoring_batch_pipeline
-```
-
-Pipeline:
-
-```text
-validate_data
-    ↓
-build_features
-    ↓
-drift_report
-    ↓
-shap_report
-```
-
-This DAG generates:
-
-```text
-reports/data_drift_report.html
-reports/retrain_signal.json
-reports/shap_summary.html
-reports/shap_summary.png
-```
-
-### Retraining DAG
-
-```text
-credit_scoring_retraining_pipeline
-```
-
-Pipeline:
-
-```text
-validate_data
-    ↓
-build_features
-    ↓
-train_catboost / train_lightgbm / train_xgboost
-    ↓
-select_best_model
-    ↓
-promote_model
-    ↓
-shap_report
-```
-
-This DAG runs full model retraining and promotes the best model to MLflow Registry.
-
----
-
-## Data Drift Monitoring
-
-Generate Evidently drift report manually:
-
-```bash
-python -m src.monitoring.drift_report
-```
-
-Outputs:
-
-```text
-reports/data_drift_report.html
-reports/retrain_signal.json
-```
-
-Example retrain signal:
-
-```json
-{
-  "retrain_required": false,
-  "reason": "No data drift detected",
-  "drifted_features": []
-}
-```
-
----
-
-## Prometheus Metrics
-
-FastAPI exposes metrics at:
-
-```text
-http://127.0.0.1:8000/metrics
-```
-
-Important metrics:
+The base scoring platform exposes Prometheus metrics such as:
 
 ```text
 credit_scoring_requests_total
 credit_scoring_errors_total
-credit_scoring_default_probability
-credit_scoring_score
+credit_scoring_request_latency_seconds
 credit_scoring_decision_total
 credit_scoring_risk_level_total
-credit_scoring_request_latency_seconds
 credit_scoring_retrain_required
 ```
 
-Prometheus UI:
+The AI Engineering layer additionally records execution traces and audit events.
+
+Conceptually:
 
 ```text
-http://127.0.0.1:9090
+request
+  ↓
+trace_id
+  ├── agent decision
+  ├── tool call
+  ├── tool result
+  ├── approval event
+  └── execution result
 ```
 
-Example query:
-
-```text
-credit_scoring_retrain_required
-```
-
----
-
-## Grafana Dashboard
-
-Grafana UI:
-
-```text
-http://127.0.0.1:3000
-```
-
-Login:
-
-```text
-admin / admin
-```
-
-Dashboard:
-
-```text
-Credit Scoring Monitoring
-```
-
-Panels:
-
-- Total Scoring Requests
-- Scoring Errors
-- Last Default Probability
-- Last Credit Score
-- Requests Per Minute
-- API Latency
-- Decision Distribution
-- Risk Level Distribution
-- Retrain Required
-
-Retrain panel:
-
-```text
-No  → credit_scoring_retrain_required = 0
-Yes → credit_scoring_retrain_required = 1
-```
-
----
-
-## SHAP Explainability
-
-The project includes two types of explainability.
-
-### 1. Global SHAP Report
-
-Generated by:
-
-```bash
-python -m src.explainability.shap_report
-```
-
-Outputs:
-
-```text
-reports/shap_summary.html
-reports/shap_summary.png
-```
-
-This report shows which features have the strongest global impact on credit default prediction.
-
-### 2. Local SHAP Explanations in API
-
-The `/score` endpoint returns `top_reasons`, which explain why a specific application received its score and decision.
-
-Example:
-
-```json
-"top_reasons": [
-  {
-    "feature": "checking_account_status",
-    "value": 1,
-    "shap_value": 0.5301,
-    "impact": "increased_risk"
-  }
-]
-```
+This gives the system a durable explanation of what an agent did, which tools it used, and what happened at the approval/execution boundary.
 
 ---
 
 ## Testing
 
-Run tests:
+The repository contains tests for both the scoring platform and AI Engineering layer, including:
+
+- scoring behavior
+- agent tool registry
+- audit event handling
+- execution tracing
+- approval state transitions
+- idempotency behavior
+- trace API
+- PostgreSQL-oriented audit storage
+
+Run tests locally:
 
 ```bash
 pytest -v
 ```
 
-Current tests cover:
-
-- Score conversion
-- Risk level logic
-- Decision logic
-- Feature generation
-- API scoring helper functions
-
-Current result:
-
-```text
-11 passed
-```
+The PostgreSQL-oriented tests are designed so the core unit-test suite does not require a GPU or a live Kubernetes cluster. Infrastructure-backed integration tests can be added separately when the corresponding services are available.
 
 ---
 
 ## CI/CD
 
-GitHub Actions runs tests, validates configs, builds Docker images, publishes them to GitHub Container Registry, and can deploy the stack to a remote Docker host.
+GitHub Actions is used to validate the repository.
 
-Workflow file:
-
-```text
-.github/workflows/ci-cd.yml
-```
-
-Details:
+Expected CI flow:
 
 ```text
-docs/ci-cd.md
+checkout
+   ↓
+install dependencies
+   ↓
+pytest
 ```
+
+The project should keep CI dependency installation aligned with `requirements.txt` so newly added AI Engineering components are tested in the same environment as local development.
 
 ---
 
-## Docker Compose Services
+## Local development
 
-Main containers:
+The core AI Engineering code can be developed without GPU execution.
 
-```text
-credit_scoring_postgres
-credit_scoring_minio
-credit_scoring_mlflow
-credit_scoring_api
-credit_scoring_prometheus
-credit_scoring_grafana
-credit_scoring_airflow_webserver
-credit_scoring_airflow_scheduler
-credit_scoring_redpanda
-credit_scoring_kafka_ui
-credit_scoring_kafka_consumer
-```
-
-Start all services:
+Create a virtual environment:
 
 ```bash
-docker compose up -d --build
-```
-
-Stop all services:
-
-```bash
-docker compose down
-```
-
-View logs:
-
-```bash
-docker logs credit_scoring_api --tail 100
-docker logs credit_scoring_kafka_consumer --tail 100
-docker logs credit_scoring_airflow_webserver --tail 100
-```
-
----
-
-## Environment Notes
-
-Local Python scripts use:
-
-```text
-MLflow: http://127.0.0.1:5000
-MinIO: http://127.0.0.1:9000
-PostgreSQL: 127.0.0.1:55432
-Kafka: 127.0.0.1:19092
-```
-
-Docker services use internal Docker hostnames:
-
-```text
-MLflow: http://mlflow:5000
-MinIO: http://minio:9000
-PostgreSQL: postgres:5432
-Kafka: redpanda:9092
-```
-
-This difference is important when running scripts locally or inside Docker containers.
-
----
-
-## How to Run on a New Machine
-
-```bash
-git clone https://github.com/ZOKHIDKHANJAROV/Credit-scoring-mlops.git
-cd Credit-scoring-mlops
 python -m venv .venv
 ```
 
-Windows:
+Windows PowerShell:
 
 ```powershell
-.\.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
 ```
 
 Install dependencies:
@@ -890,90 +468,171 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-Start infrastructure:
+Run tests:
+
+```bash
+pytest -v
+```
+
+Run the AI Engineering API during local development:
+
+```bash
+uvicorn ai_engineering.api.agent_service:app --host 0.0.0.0 --port 8010
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8010/docs
+```
+
+LLM tool calling uses an OpenAI-compatible endpoint. For a local vLLM deployment, configure for example:
+
+```text
+LLM_BASE_URL=http://localhost:8000/v1
+LLM_API_KEY=local
+LLM_MODEL=Qwen/Qwen3-8B
+```
+
+The LLM runtime is optional for unit tests that exercise deterministic components.
+
+---
+
+## Docker Compose infrastructure
+
+The main platform can be started with:
 
 ```bash
 docker compose up -d --build
 ```
 
-Restore dataset:
+Typical local services include:
 
-```bash
-python -m scripts.restore_german_credit_data
-```
+| Service | Address |
+|---|---|
+| FastAPI scoring API | `127.0.0.1:8000` |
+| AI Engineering API | `127.0.0.1:8010` |
+| MLflow | `127.0.0.1:5000` |
+| Prometheus | `127.0.0.1:9090` |
+| Grafana | `127.0.0.1:3000` |
+| Airflow | `127.0.0.1:8080` |
+| Kafka UI | `127.0.0.1:8081` |
+| PostgreSQL | `127.0.0.1:55432` |
 
-Run training pipeline:
-
-```bash
-dvc repro
-```
-
-Open:
-
-```text
-FastAPI:    http://127.0.0.1:8000/docs
-MLflow:     http://127.0.0.1:5000
-Grafana:    http://127.0.0.1:3000
-Airflow:    http://127.0.0.1:8080
-Kafka UI:   http://127.0.0.1:8081
-```
+Actual exposed ports should be treated as environment/configuration rather than hard-coded production contracts.
 
 ---
 
-## Resume Bullet
+## Kubernetes
+
+Kubernetes manifests are used for controlled AI Engineering workloads.
+
+The important security boundary is:
 
 ```text
-Built an end-to-end Credit Scoring MLOps system with DVC pipelines, MLflow Tracking and Model Registry, FastAPI model serving, PostgreSQL prediction logging, Kafka real-time scoring, Airflow orchestration, Evidently drift monitoring, SHAP explainability, Prometheus/Grafana observability, Docker Compose infrastructure, Pytest tests, and GitHub Actions CI.
+LLM
+ ↓
+training job plan
+ ↓
+human approval
+ ↓
+Kubernetes executor
+ ↓
+Job
 ```
+
+The agent does not receive arbitrary cluster administration capabilities.
+
+A local `kind` cluster can be used for development and integration testing. GPU support is not required for validating the control-plane logic.
 
 ---
 
-## Project Status
+## Engineering roadmap
 
-Completed:
+The project is being developed in milestones:
 
-- DVC pipeline
-- MLflow tracking
-- MLflow model registry
-- Champion model alias
-- FastAPI inference
-- PostgreSQL scoring logs
-- SHAP global explainability
-- SHAP local explanations in API
-- Evidently drift monitoring
-- Retrain signal
-- Prometheus metrics
-- Grafana dashboard
-- Airflow batch pipeline
-- Airflow retraining pipeline
-- Kafka real-time scoring
-- Kafka UI
-- Kafka producer
-- Kafka consumer
-- Pytest tests
-- GitHub Actions CI
-- Docker Compose infrastructure
+### Completed foundation
 
-Possible future improvements:
+- Credit scoring ML pipeline
+- MLflow model lifecycle
+- FastAPI scoring
+- Kafka/Redpanda scoring
+- Monitoring and drift detection
+- AI Engineering agent/tool-calling foundation
+- Approval workflow
+- Kubernetes action boundary
+- Agent audit/tracing
+- PostgreSQL persistence foundation
 
-- Feast Feature Store
-- Dockerfile for Airflow image
-- Docker healthchecks
-- Makefile or PowerShell automation scripts
-- More API integration tests
-- Authentication for API
-- Model performance monitoring over time
-- Batch scoring pipeline
-- Cloud deployment
+### Current milestone
+
+**Persistent and idempotent AI Engineering control plane**
+
+- durable approval state
+- durable audit events
+- idempotent execution
+- Alembic migrations
+- stronger CI validation
+- concurrency/state-machine tests
+
+### Next milestone
+
+**Command Center UI and production hardening**
+
+- dashboard against the final backend contracts
+- end-to-end approval flow
+- richer observability
+- security hardening
+- deployment documentation
+- release automation
 
 ---
 
-## Author
+## Project principles
 
-Project by **Vohid Khanzharov**
+1. **Read-only by default.**
+2. **Mutations require explicit human approval.**
+3. **Every important agent execution should be traceable.**
+4. **Approval and execution state must be durable.**
+5. **Repeated requests must not duplicate destructive work.**
+6. **Infrastructure execution is separated from LLM reasoning.**
+7. **Tests must cover state transitions, not just happy-path endpoints.**
+8. **Production schema changes are migration-driven.**
+9. **GPU and Kubernetes are optional dependencies for core development.**
 
-GitHub:
+---
+
+## Portfolio value
+
+This repository demonstrates more than model training. It covers the engineering lifecycle around a production ML system:
 
 ```text
-https://github.com/ZOKHIDKHANJAROV
+ML
+├── training
+├── evaluation
+├── registry
+└── serving
+
+MLOps
+├── monitoring
+├── drift detection
+├── retraining
+├── CI/CD
+└── observability
+
+AI Engineering
+├── agent orchestration
+├── tool calling
+├── approvals
+├── audit trails
+├── idempotent execution
+└── controlled Kubernetes actions
 ```
+
+The intended outcome is a production-style ML/AI engineering platform where model operations are observable, reviewable and controlled rather than hidden behind an autonomous black box.
+
+---
+
+## License
+
+Add a project license before publishing the repository as a reusable open-source package.
