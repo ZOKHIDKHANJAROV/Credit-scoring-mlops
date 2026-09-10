@@ -52,7 +52,10 @@ def test_agent_decision_creates_approval_for_retraining(monkeypatch) -> None:
 
     events = client.get(f"/api/v1/audit/traces/{payload['approval_id']}")
     assert events.status_code == 200
-    assert events.json()[0]["event_type"] == "approval_requested"
+    assert [event["event_type"] for event in events.json()] == [
+        "decision_created",
+        "approval_requested",
+    ]
 
 
 def test_agent_decision_does_not_create_approval_for_read_only_action(monkeypatch) -> None:
