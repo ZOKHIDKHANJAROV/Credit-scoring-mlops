@@ -25,6 +25,24 @@ jobs:
   quality:
     name: Tests and static validation
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: mlflow
+          POSTGRES_PASSWORD: mlflow
+          POSTGRES_DB: mlflow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mlflow -d mlflow"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      AI_AUDIT_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@127.0.0.1:5432/mlflow
+      MONITORING_DATABASE_URL: postgresql+pg8000://mlflow:mlflow@127.0.0.1:5432/mlflow
 
     steps:
       - name: Checkout
