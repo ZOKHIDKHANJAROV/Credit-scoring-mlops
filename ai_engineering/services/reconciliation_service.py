@@ -12,7 +12,7 @@ from ai_engineering.storage.approval_store import ApprovalStore
 
 
 class ReconciliationService:
-    """Resolve UNKNOWN executions without allowing blind duplicate execution."""
+    """Resolve uncertain executions without allowing blind duplicate execution."""
 
     def __init__(self, store: ApprovalStore, executor: Any, audit_service: AuditService) -> None:
         self.store = store
@@ -23,7 +23,7 @@ class ReconciliationService:
         approval = self.store.get(approval_id)
         if approval is None:
             raise KeyError(f"Approval not found: {approval_id}")
-        if approval.status != ApprovalStatus.UNKNOWN:
+        if approval.status not in {ApprovalStatus.UNKNOWN, ApprovalStatus.EXECUTING}:
             return approval
 
         self.audit_service.record(
