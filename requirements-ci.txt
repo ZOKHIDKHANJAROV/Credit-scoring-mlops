@@ -1,3 +1,12 @@
 pandas
 pydantic
 pytest
+fastapi
+uvicorn
+sqlalchemy
+pg8000
+psycopg2-binary
+alembic
+prometheus-client
+mlflow
+openai

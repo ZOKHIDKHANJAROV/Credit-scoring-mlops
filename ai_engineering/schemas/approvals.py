@@ -21,6 +21,7 @@ class ApprovalStatus(str, Enum):
 
 class ApprovalRequest(BaseModel):
     approval_id: str = Field(default_factory=lambda: str(uuid4()))
+    trace_id: str = Field(default_factory=lambda: str(uuid4()))
     action: str
     reason: str
     requested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

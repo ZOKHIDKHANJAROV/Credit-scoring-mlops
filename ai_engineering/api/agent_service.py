@@ -28,7 +28,6 @@ from ai_engineering.storage.audit_store import AuditStore
 from ai_engineering.tools.default_registry import build_default_registry
 from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown, KubernetesExecutor
 
-
 ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
 app = FastAPI(title="AI Engineering Command Center Agent", version="0.8.0")
@@ -68,6 +67,7 @@ class ApprovalCreateRequest(BaseModel):
     action: str = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=2000)
     execution_plan: dict = Field(default_factory=dict)
+    trace_id: str | None = Field(default=None, min_length=1, max_length=36)
 
 
 def authenticated(authorization: str | None = Header(default=None)) -> None:
@@ -85,7 +85,6 @@ def build_agent() -> ToolCallingAgent:
 
 
 def build_orchestrator() -> OrchestratorAgent:
-    """Build the reasoning layer without exposing infrastructure mutation."""
     return OrchestratorAgent(llm_provider=OpenAICompatibleProvider())
 
 
@@ -121,8 +120,9 @@ def run_agent(request: AgentRunRequest) -> AgentRunResponse:
 
 @app.post("/api/v1/agent/decision", response_model=AgentDecisionResponse, dependencies=[Depends(authenticated)])
 def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionResponse:
-    """Turn an LLM recommendation into an approval request without executing it."""
     trace_id = str(request.context.get("trace_id") or request.context.get("event_id") or uuid4())
+    if len(trace_id) > 36:
+        raise HTTPException(status_code=400, detail="trace_id must be at most 36 characters")
     try:
         decision: AgentDecision = build_orchestrator().reason(request.task, request.context)
     except Exception as exc:
@@ -143,6 +143,7 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
     approval_id: str | None = None
     if decision.action == "propose_retraining":
         approval = ApprovalRequest(
+            trace_id=trace_id,
             action="create_training_job",
             reason=decision.reason,
             execution_plan={
@@ -157,7 +158,7 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
         approval_id = approval.approval_id
         audit_service.record(
             AuditEventType.APPROVAL_REQUESTED,
-            trace_id=approval_id,
+            trace_id=approval.trace_id,
             action=approval.action,
             status=approval.status.value,
             payload={"reason": approval.reason, "execution_plan": approval.execution_plan},
@@ -177,7 +178,11 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
 def create_approval(request: ApprovalCreateRequest) -> ApprovalRequest:
     if request.action not in ALLOWED_MUTATING_ACTIONS:
         raise HTTPException(status_code=400, detail="Unsupported approval action")
+    approval_id = str(uuid4())
+    trace_id = request.trace_id or approval_id
     approval = ApprovalRequest(
+        approval_id=approval_id,
+        trace_id=trace_id,
         action=request.action,
         reason=request.reason,
         execution_plan=request.execution_plan,
@@ -186,7 +191,7 @@ def create_approval(request: ApprovalCreateRequest) -> ApprovalRequest:
     APPROVAL_REQUESTS_TOTAL.labels(action=approval.action).inc()
     audit_service.record(
         AuditEventType.APPROVAL_REQUESTED,
-        trace_id=approval.approval_id,
+        trace_id=approval.trace_id,
         action=approval.action,
         status=approval.status.value,
         payload={"reason": approval.reason, "execution_plan": approval.execution_plan},
@@ -219,7 +224,7 @@ def decide_approval(approval_id: str, decision: ApprovalDecision) -> ApprovalReq
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     audit_service.record(
         AuditEventType.APPROVAL_DECIDED,
-        trace_id=approval_id,
+        trace_id=approval.trace_id,
         actor=decision.decided_by,
         action=approval.action,
         status=approval.status.value,
@@ -239,7 +244,7 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
         approval = approval_store.mark_executing(approval_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    audit_service.record(AuditEventType.EXECUTION_STARTED, trace_id=approval_id, action=approval.action, status="started")
+    audit_service.record(AuditEventType.EXECUTION_STARTED, trace_id=approval.trace_id, action=approval.action, status="started")
     with EXECUTION_DURATION_SECONDS.labels(action=approval.action).time():
         try:
             result = kubernetes_executor.apply_training_job(approved=True, execution_id=approval_id)
@@ -247,22 +252,22 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
             EXECUTIONS_TOTAL.labels(action=approval.action, status="unknown").inc()
             EXECUTION_UNKNOWN_TOTAL.labels(action=approval.action).inc()
             unknown = approval_store.mark_unknown(approval_id, {"executed": False, "unknown": True, "error": str(exc)})
-            audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval_id, action=approval.action, status="unknown", error="execution outcome unknown")
+            audit_service.record(AuditEventType.EXECUTION_UNKNOWN, trace_id=approval.trace_id, action=approval.action, status="unknown", error="execution outcome unknown")
             return unknown
         except Exception as exc:
             EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
             failure = {"executed": False, "error": str(exc)}
             approval_store.mark_failed(approval_id, failure)
-            audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
+            audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval.trace_id, action=approval.action, status="failed", error="execution failed", payload={"result": failure})
             raise HTTPException(status_code=500, detail="Execution failed") from exc
         if result.get("executed") is True:
             EXECUTIONS_TOTAL.labels(action=approval.action, status="completed").inc()
             completed = approval_store.mark_completed(approval_id, result)
-            audit_service.record(AuditEventType.EXECUTION_COMPLETED, trace_id=approval_id, action=approval.action, status="completed", payload={"result": result})
+            audit_service.record(AuditEventType.EXECUTION_COMPLETED, trace_id=approval.trace_id, action=approval.action, status="completed", payload={"result": result})
             return completed
         EXECUTIONS_TOTAL.labels(action=approval.action, status="failed").inc()
         failed = approval_store.mark_failed(approval_id, result)
-        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval_id, action=approval.action, status="failed", payload={"result": result})
+        audit_service.record(AuditEventType.EXECUTION_FAILED, trace_id=approval.trace_id, action=approval.action, status="failed", payload={"result": result})
         return failed
 
 
@@ -301,7 +306,13 @@ def list_audit_events(
 
 @app.get("/api/v1/audit/traces/{trace_id}", response_model=list[AuditEvent], dependencies=[Depends(authenticated)])
 def get_trace(trace_id: str) -> list[AuditEvent]:
-    return audit_store.list(trace_id=trace_id)
+    events = audit_store.list(trace_id=trace_id)
+    if events:
+        return events
+    approval = approval_store.get(trace_id)
+    if approval is not None and approval.trace_id != trace_id:
+        return audit_store.list(trace_id=approval.trace_id)
+    return events
 
 
 @app.get("/api/v1/audit/stats", dependencies=[Depends(authenticated)])
