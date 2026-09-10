@@ -28,7 +28,9 @@ class ApprovalService:
         return self.store.decide(decision)
 
     def execute(self, approval_id: str) -> ApprovalRequest:
-        request = self.store.mark_executing(approval_id)
+        request, owns_execution = self.store.claim_execution(approval_id)
+        if not owns_execution:
+            return request
         try:
             result = self.executor.apply_training_job(approved=True, execution_id=approval_id)
         except KubernetesExecutionUnknown as exc:
