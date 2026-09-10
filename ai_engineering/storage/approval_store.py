@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import JSON, DateTime, Integer, String, Text, create_engine, delete, select
@@ -31,6 +31,7 @@ class ApprovalRequestRow(Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decided_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    execution_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     execution_result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     def to_schema(self) -> ApprovalRequest:
@@ -45,6 +46,7 @@ class ApprovalRequestRow(Base):
             decided_at=self.decided_at,
             decided_by=self.decided_by,
             decision_comment=self.decision_comment,
+            execution_started_at=self.execution_started_at,
             execution_result=self.execution_result,
         )
 
@@ -128,6 +130,7 @@ class ApprovalStore:
         request.decided_at = updated.decided_at
         request.decided_by = updated.decided_by
         request.decision_comment = updated.decision_comment
+        request.execution_started_at = updated.execution_started_at
         request.execution_result = updated.execution_result
         return request
 
@@ -147,6 +150,7 @@ class ApprovalStore:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             self._transition(row, ApprovalStatus.EXECUTING)
+            row.execution_started_at = datetime.now(timezone.utc)
             session.commit()
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
@@ -154,18 +158,14 @@ class ApprovalStore:
     def claim_execution(
         self, approval_id: str, request: ApprovalRequest | None = None
     ) -> tuple[ApprovalRequest, bool]:
-        """Atomically claim an approved execution before touching Kubernetes.
-
-        Only APPROVED -> EXECUTING can win the claim. A concurrent caller that
-        reaches an already EXECUTING row receives the current state and must not
-        invoke the executor. Other states remain invalid transitions.
-        """
+        """Atomically claim an approved execution before touching Kubernetes."""
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             current = ApprovalStatus(row.status)
             if current == ApprovalStatus.EXECUTING:
                 return row.to_schema(), False
             self._transition(row, ApprovalStatus.EXECUTING)
+            row.execution_started_at = datetime.now(timezone.utc)
             session.commit()
             updated = row.to_schema()
         return (self._sync_request(request, updated) if request is not None else updated), True
@@ -207,6 +207,7 @@ class ApprovalStore:
                     f"Retry execution requires unknown state, got {row.status}"
                 )
             row.status = ApprovalStatus.EXECUTING.value
+            row.execution_started_at = datetime.now(timezone.utc)
             session.commit()
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
@@ -214,17 +215,40 @@ class ApprovalStore:
     def claim_retry_execution(
         self, approval_id: str, request: ApprovalRequest | None = None
     ) -> tuple[ApprovalRequest, bool]:
-        """Atomically claim an UNKNOWN retry before inspecting or creating a Job.
-
-        The row lock makes the transition the single ownership point for a retry.
-        A concurrent caller observes the state after the winner commits and cannot
-        proceed to the Kubernetes create path.
-        """
+        """Atomically claim an UNKNOWN retry before inspecting or creating a Job."""
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
             if ApprovalStatus(row.status) != ApprovalStatus.UNKNOWN:
                 return row.to_schema(), False
             row.status = ApprovalStatus.EXECUTING.value
+            row.execution_started_at = datetime.now(timezone.utc)
+            session.commit()
+            updated = row.to_schema()
+        return (self._sync_request(request, updated) if request is not None else updated), True
+
+    def recover_stale_execution(
+        self, approval_id: str, stale_after_seconds: int, request: ApprovalRequest | None = None
+    ) -> tuple[ApprovalRequest, bool]:
+        """Move an abandoned execution lease back to UNKNOWN after a grace period."""
+        if stale_after_seconds < 1:
+            raise ValueError("stale_after_seconds must be positive")
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            if ApprovalStatus(row.status) != ApprovalStatus.EXECUTING or row.execution_started_at is None:
+                return row.to_schema(), False
+            started_at = row.execution_started_at
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=stale_after_seconds)
+            if started_at > cutoff:
+                return row.to_schema(), False
+            row.status = ApprovalStatus.UNKNOWN.value
+            row.execution_result = {
+                "executed": False,
+                "unknown": True,
+                "recovered_stale_execution": True,
+                "execution_started_at": started_at.isoformat(),
+            }
             session.commit()
             updated = row.to_schema()
         return (self._sync_request(request, updated) if request is not None else updated), True
