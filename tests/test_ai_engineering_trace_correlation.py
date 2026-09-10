@@ -74,7 +74,7 @@ def test_decision_approval_execution_share_trace_id(monkeypatch) -> None:
     ]
 
 
-def test_direct_approval_gets_own_trace_id() -> None:
+def test_direct_approval_preserves_approval_id_trace_lookup() -> None:
     agent_service.approval_store.clear()
     agent_service.audit_store.clear()
 
@@ -88,10 +88,34 @@ def test_direct_approval_gets_own_trace_id() -> None:
     )
     assert response.status_code == 201
     payload = response.json()
-    assert payload["trace_id"]
+    assert payload["trace_id"] == payload["approval_id"]
+
+    trace = client.get(f"/api/v1/audit/traces/{payload['approval_id']}")
+    assert trace.status_code == 200
+    assert len(trace.json()) == 1
+    assert trace.json()[0]["event_type"] == "approval_requested"
+
+
+def test_direct_approval_accepts_explicit_trace_id() -> None:
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+
+    trace_id = "trace-direct-20260910"
+    response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action": "create_training_job",
+            "reason": "Explicit trace test",
+            "execution_plan": {},
+            "trace_id": trace_id,
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["trace_id"] == trace_id
     assert payload["trace_id"] != payload["approval_id"]
 
-    trace = client.get(f"/api/v1/audit/traces/{payload['trace_id']}")
+    trace = client.get(f"/api/v1/audit/traces/{trace_id}")
     assert trace.status_code == 200
     assert len(trace.json()) == 1
     assert trace.json()[0]["event_type"] == "approval_requested"
