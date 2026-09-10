@@ -29,7 +29,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-06fed5e
+          image: ghcr.io/zokhidkhanjanarov/credit-scoring-mlops-agent:sha-06fed5e
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -51,6 +51,8 @@ spec:
                 secretKeyRef:
                   name: ai-engineering-api
                   key: AI_ENGINEERING_API_TOKEN
+            - name: AI_EXECUTION_LEASE_SECONDS
+              value: "900"
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow:5000"
             - name: MLFLOW_EXPERIMENT_NAME
