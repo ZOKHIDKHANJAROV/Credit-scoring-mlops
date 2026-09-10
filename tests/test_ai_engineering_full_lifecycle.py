@@ -73,6 +73,7 @@ def test_agent_to_approval_to_execution_lifecycle(monkeypatch) -> None:
     assert trace_response.status_code == 200
     event_types = [event["event_type"] for event in trace_response.json()]
     assert event_types == [
+        "decision_created",
         "approval_requested",
         "approval_decided",
         "execution_started",
