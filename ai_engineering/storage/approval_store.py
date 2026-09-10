@@ -163,18 +163,20 @@ class ApprovalStore:
     def mark_completed(self, approval_id: str, result: dict, request: ApprovalRequest | None = None) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
-            self._transition(row, ApprovalStatus.COMPLETED)
-            row.execution_result = json.loads(json.dumps(result, default=str))
-            session.commit()
+            if ApprovalStatus(row.status) != ApprovalStatus.COMPLETED:
+                self._transition(row, ApprovalStatus.COMPLETED)
+                row.execution_result = json.loads(json.dumps(result, default=str))
+                session.commit()
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
 
     def mark_failed(self, approval_id: str, result: dict, request: ApprovalRequest | None = None) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)
-            self._transition(row, ApprovalStatus.FAILED)
-            row.execution_result = json.loads(json.dumps(result, default=str))
-            session.commit()
+            if ApprovalStatus(row.status) != ApprovalStatus.FAILED:
+                self._transition(row, ApprovalStatus.FAILED)
+                row.execution_result = json.loads(json.dumps(result, default=str))
+                session.commit()
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
 
