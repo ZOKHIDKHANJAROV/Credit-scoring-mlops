@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from ai_engineering.observability import EXECUTION_RETRIES_TOTAL
@@ -11,13 +12,29 @@ from ai_engineering.services.audit_service import AuditService
 from ai_engineering.storage.approval_store import ApprovalStore
 
 
+DEFAULT_EXECUTION_LEASE_SECONDS = 900
+
+
 class ReconciliationService:
     """Resolve uncertain executions without allowing blind duplicate execution."""
 
-    def __init__(self, store: ApprovalStore, executor: Any, audit_service: AuditService) -> None:
+    def __init__(
+        self,
+        store: ApprovalStore,
+        executor: Any,
+        audit_service: AuditService,
+        execution_lease_seconds: int | None = None,
+    ) -> None:
         self.store = store
         self.executor = executor
         self.audit_service = audit_service
+        if execution_lease_seconds is None:
+            execution_lease_seconds = int(
+                os.getenv("AI_EXECUTION_LEASE_SECONDS", str(DEFAULT_EXECUTION_LEASE_SECONDS))
+            )
+        if execution_lease_seconds < 1:
+            raise ValueError("execution_lease_seconds must be positive")
+        self.execution_lease_seconds = execution_lease_seconds
 
     def reconcile(self, approval_id: str) -> ApprovalRequest:
         approval = self.store.get(approval_id)
@@ -43,8 +60,24 @@ class ReconciliationService:
             recovered = self.store.mark_failed(
                 approval_id, {"executed": False, "reconciled": True, **result}
             )
+        elif (
+            approval.status == ApprovalStatus.EXECUTING
+            and result.get("status") == "absent"
+        ):
+            recovered, stale = self.store.recover_stale_execution(
+                approval_id, self.execution_lease_seconds
+            )
+            if stale:
+                self.audit_service.record(
+                    AuditEventType.EXECUTION_UNKNOWN,
+                    trace_id=approval.trace_id,
+                    action=approval.action,
+                    status=ApprovalStatus.UNKNOWN.value,
+                    error="execution lease expired while Kubernetes Job was absent",
+                    payload={"lease_seconds": self.execution_lease_seconds, "job_name": job_name},
+                )
         else:
-            recovered = approval
+            recovered = self.store.get(approval_id) or approval
 
         self.audit_service.record(
             AuditEventType.EXECUTION_RECONCILIATION_COMPLETED,

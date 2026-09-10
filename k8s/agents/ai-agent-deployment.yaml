@@ -51,6 +51,8 @@ spec:
                 secretKeyRef:
                   name: ai-engineering-api
                   key: AI_ENGINEERING_API_TOKEN
+            - name: AI_EXECUTION_LEASE_SECONDS
+              value: "900"
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow:5000"
             - name: MLFLOW_EXPERIMENT_NAME

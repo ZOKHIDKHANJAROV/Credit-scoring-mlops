@@ -30,6 +30,7 @@ class ApprovalRequest(BaseModel):
     decided_at: datetime | None = None
     decided_by: str | None = None
     decision_comment: str | None = None
+    execution_started_at: datetime | None = None
     execution_result: dict | None = None
 
 
