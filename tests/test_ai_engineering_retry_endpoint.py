@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from ai_engineering.api import agent_service
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest, ApprovalStatus
+from ai_engineering.storage.approval_store import ApprovalRequestRow
 
 
 client = TestClient(agent_service.app)
@@ -139,3 +143,60 @@ def test_reconcile_can_finish_claimed_running_retry(monkeypatch) -> None:
     assert completed.status_code == 200
     assert completed.json()["status"] == ApprovalStatus.COMPLETED.value
     assert status.call_count == 2
+
+
+def test_reconcile_does_not_recover_fresh_execution_without_job(monkeypatch) -> None:
+    """A recently claimed execution gets a grace period before stale recovery."""
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+    request = make_unknown()
+    claimed, owner = agent_service.approval_store.claim_retry_execution(request.approval_id)
+    assert owner is True
+    assert claimed.execution_started_at is not None
+
+    monkeypatch.setattr(
+        agent_service.kubernetes_executor,
+        "get_training_job_status",
+        Mock(return_value={"exists": False, "status": "absent", "job_name": f"credit-training-{request.approval_id}"}),
+    )
+
+    response = client.post(f"/api/v1/approvals/{request.approval_id}/reconcile")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == ApprovalStatus.EXECUTING.value
+
+
+def test_reconcile_recovers_stale_execution_without_job(monkeypatch) -> None:
+    """An abandoned execution lease becomes UNKNOWN and can be retried safely."""
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+    request = make_unknown()
+    claimed, owner = agent_service.approval_store.claim_retry_execution(request.approval_id)
+    assert owner is True
+    assert claimed.execution_started_at is not None
+
+    with Session(agent_service.approval_store.engine) as session:
+        row = session.scalar(
+            select(ApprovalRequestRow).where(ApprovalRequestRow.approval_id == request.approval_id)
+        )
+        assert row is not None
+        row.execution_started_at = datetime.now(timezone.utc) - timedelta(seconds=3600)
+        session.commit()
+
+    monkeypatch.setattr(
+        agent_service.kubernetes_executor,
+        "get_training_job_status",
+        Mock(return_value={"exists": False, "status": "absent", "job_name": f"credit-training-{request.approval_id}"}),
+    )
+
+    response = client.post(f"/api/v1/approvals/{request.approval_id}/reconcile")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == ApprovalStatus.UNKNOWN.value
+    assert payload["execution_result"]["recovered_stale_execution"] is True
+    assert payload["execution_result"]["unknown"] is True
+
+    events = client.get(f"/api/v1/audit/traces/{request.approval_id}")
+    assert events.status_code == 200
+    assert any(event["event_type"] == "execution_unknown" for event in events.json())
