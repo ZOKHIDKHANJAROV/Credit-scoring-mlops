@@ -114,3 +114,28 @@ def test_retry_endpoint_second_caller_cannot_claim_executing_retry(monkeypatch) 
     assert response.status_code == 200
     assert response.json()["status"] == ApprovalStatus.EXECUTING.value
     apply.assert_not_called()
+
+
+def test_reconcile_can_finish_claimed_running_retry(monkeypatch) -> None:
+    """A running Job remains recoverable after retry ownership moves to EXECUTING."""
+    agent_service.approval_store.clear()
+    agent_service.audit_store.clear()
+    request = make_unknown()
+    agent_service.approval_store.claim_retry_execution(request.approval_id)
+
+    status = Mock(
+        side_effect=[
+            {"exists": True, "status": "running", "job_name": f"credit-training-{request.approval_id}"},
+            {"exists": True, "status": "completed", "job_name": f"credit-training-{request.approval_id}"},
+        ]
+    )
+    monkeypatch.setattr(agent_service.kubernetes_executor, "get_training_job_status", status)
+
+    running = client.post(f"/api/v1/approvals/{request.approval_id}/reconcile")
+    assert running.status_code == 200
+    assert running.json()["status"] == ApprovalStatus.EXECUTING.value
+
+    completed = client.post(f"/api/v1/approvals/{request.approval_id}/reconcile")
+    assert completed.status_code == 200
+    assert completed.json()["status"] == ApprovalStatus.COMPLETED.value
+    assert status.call_count == 2
