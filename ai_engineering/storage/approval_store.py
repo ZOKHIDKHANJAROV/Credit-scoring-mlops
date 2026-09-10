@@ -190,6 +190,24 @@ class ApprovalStore:
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
 
+    def claim_retry_execution(
+        self, approval_id: str, request: ApprovalRequest | None = None
+    ) -> tuple[ApprovalRequest, bool]:
+        """Atomically claim an UNKNOWN retry before inspecting or creating a Job.
+
+        The row lock makes the transition the single ownership point for a retry.
+        A concurrent caller observes the state after the winner commits and cannot
+        proceed to the Kubernetes create path.
+        """
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            if ApprovalStatus(row.status) != ApprovalStatus.UNKNOWN:
+                return row.to_schema(), False
+            row.status = ApprovalStatus.EXECUTING.value
+            session.commit()
+            updated = row.to_schema()
+        return (self._sync_request(request, updated) if request is not None else updated), True
+
     def _get_locked(self, session: Session, approval_id: str) -> ApprovalRequestRow:
         row = session.scalar(
             select(ApprovalRequestRow)
