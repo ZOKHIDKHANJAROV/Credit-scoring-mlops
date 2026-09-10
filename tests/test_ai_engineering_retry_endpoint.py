@@ -4,7 +4,6 @@ from fastapi.testclient import TestClient
 
 from ai_engineering.api import agent_service
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest, ApprovalStatus
-from ai_engineering.storage.approval_store import InvalidApprovalTransition
 
 
 client = TestClient(agent_service.app)
@@ -62,7 +61,7 @@ def test_retry_endpoint_does_not_retry_when_job_exists(monkeypatch) -> None:
     response = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
 
     assert response.status_code == 200
-    assert response.json()["status"] == ApprovalStatus.UNKNOWN.value
+    assert response.json()["status"] == ApprovalStatus.EXECUTING.value
     apply.assert_not_called()
 
 
@@ -92,40 +91,26 @@ def test_retry_endpoint_returns_404_for_unknown_approval() -> None:
     assert response.status_code == 404
 
 
-def test_retry_endpoint_handles_race_for_unknown_state(monkeypatch) -> None:
-    """A losing concurrent retry must not become a 500 or execute twice."""
+def test_retry_endpoint_second_caller_cannot_claim_executing_retry(monkeypatch) -> None:
+    """Once claimed, a concurrent retry cannot reach the Kubernetes create path."""
     agent_service.approval_store.clear()
     agent_service.audit_store.clear()
     request = make_unknown()
-
-    status = Mock(
-        return_value={
-            "exists": False,
-            "status": "absent",
-            "job_name": f"credit-training-{request.approval_id}",
-        }
-    )
     apply = Mock(return_value={"executed": True, "execution_id": request.approval_id})
-    monkeypatch.setattr(agent_service.kubernetes_executor, "get_training_job_status", status)
+
+    monkeypatch.setattr(
+        agent_service.kubernetes_executor,
+        "get_training_job_status",
+        Mock(return_value={"exists": False, "status": "absent", "job_name": f"credit-training-{request.approval_id}"}),
+    )
     monkeypatch.setattr(agent_service.kubernetes_executor, "apply_training_job", apply)
 
-    original_mark_retry = agent_service.approval_store.mark_retry_executing
-    calls = 0
+    claimed, owns_retry = agent_service.approval_store.claim_retry_execution(request.approval_id)
+    assert owns_retry is True
+    assert claimed.status == ApprovalStatus.EXECUTING
 
-    def race_once(approval_id: str, request=None):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            return original_mark_retry(approval_id, request)
-        raise InvalidApprovalTransition("Retry execution requires unknown state, got executing")
+    response = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
 
-    monkeypatch.setattr(agent_service.approval_store, "mark_retry_executing", race_once)
-
-    first = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
-    second = client.post(f"/api/v1/approvals/{request.approval_id}/retry")
-
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["status"] == ApprovalStatus.COMPLETED.value
-    assert second.json()["status"] == ApprovalStatus.COMPLETED.value
-    apply.assert_called_once_with(approved=True, execution_id=request.approval_id)
+    assert response.status_code == 200
+    assert response.json()["status"] == ApprovalStatus.EXECUTING.value
+    apply.assert_not_called()
