@@ -151,6 +151,25 @@ class ApprovalStore:
             updated = row.to_schema()
         return self._sync_request(request, updated) if request is not None else updated
 
+    def claim_execution(
+        self, approval_id: str, request: ApprovalRequest | None = None
+    ) -> tuple[ApprovalRequest, bool]:
+        """Atomically claim an approved execution before touching Kubernetes.
+
+        Only APPROVED -> EXECUTING can win the claim. A concurrent caller that
+        reaches an already EXECUTING row receives the current state and must not
+        invoke the executor. Other states remain invalid transitions.
+        """
+        with Session(self.engine) as session:
+            row = self._get_locked(session, approval_id)
+            current = ApprovalStatus(row.status)
+            if current == ApprovalStatus.EXECUTING:
+                return row.to_schema(), False
+            self._transition(row, ApprovalStatus.EXECUTING)
+            session.commit()
+            updated = row.to_schema()
+        return (self._sync_request(request, updated) if request is not None else updated), True
+
     def mark_unknown(self, approval_id: str, result: dict, request: ApprovalRequest | None = None) -> ApprovalRequest:
         with Session(self.engine) as session:
             row = self._get_locked(session, approval_id)

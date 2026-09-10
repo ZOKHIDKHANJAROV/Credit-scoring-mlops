@@ -33,6 +33,49 @@ def test_execution_transition_is_single_use() -> None:
         store.mark_executing(request.approval_id)
 
 
+def test_atomic_execution_claim_is_idempotent_for_existing_execution() -> None:
+    store = ApprovalStore()
+    request = make_approved(store)
+
+    claimed, owner = store.claim_execution(request.approval_id)
+    duplicate, duplicate_owner = store.claim_execution(request.approval_id)
+
+    assert owner is True
+    assert duplicate_owner is False
+    assert claimed.status == ApprovalStatus.EXECUTING
+    assert duplicate.status == ApprovalStatus.EXECUTING
+
+
+def test_atomic_execution_claim_rejects_non_approved_state() -> None:
+    store = ApprovalStore()
+    request = store.create(
+        ApprovalRequest(
+            action="create_training_job",
+            reason="Needs review",
+            execution_plan={"job": "credit-model-training"},
+        )
+    )
+
+    with pytest.raises(InvalidApprovalTransition):
+        store.claim_execution(request.approval_id)
+
+
+def test_concurrent_atomic_execution_claim_allows_only_one_owner() -> None:
+    store = ApprovalStore()
+    request = make_approved(store)
+
+    def try_claim() -> bool:
+        _, owner = store.claim_execution(request.approval_id)
+        return owner
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(lambda _: try_claim(), range(8)))
+
+    assert results.count(True) == 1
+    assert results.count(False) == 7
+    assert store.get(request.approval_id).status == ApprovalStatus.EXECUTING
+
+
 def test_completed_is_terminal() -> None:
     store = ApprovalStore()
     request = make_approved(store)

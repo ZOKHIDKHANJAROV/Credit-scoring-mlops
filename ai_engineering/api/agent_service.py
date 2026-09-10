@@ -241,9 +241,11 @@ def execute_approval(approval_id: str) -> ApprovalRequest:
     if approval.action not in ALLOWED_MUTATING_ACTIONS:
         raise HTTPException(status_code=400, detail="Unsupported approval action")
     try:
-        approval = approval_store.mark_executing(approval_id)
+        approval, owns_execution = approval_store.claim_execution(approval_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not owns_execution:
+        return approval
     audit_service.record(AuditEventType.EXECUTION_STARTED, trace_id=approval.trace_id, action=approval.action, status="started")
     with EXECUTION_DURATION_SECONDS.labels(action=approval.action).time():
         try:
