@@ -28,7 +28,6 @@ from ai_engineering.storage.audit_store import AuditStore
 from ai_engineering.tools.default_registry import build_default_registry
 from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown, KubernetesExecutor
 
-
 ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
 app = FastAPI(title="AI Engineering Command Center Agent", version="0.8.0")
@@ -86,7 +85,6 @@ def build_agent() -> ToolCallingAgent:
 
 
 def build_orchestrator() -> OrchestratorAgent:
-    """Build the reasoning layer without exposing infrastructure mutation."""
     return OrchestratorAgent(llm_provider=OpenAICompatibleProvider())
 
 
@@ -122,7 +120,6 @@ def run_agent(request: AgentRunRequest) -> AgentRunResponse:
 
 @app.post("/api/v1/agent/decision", response_model=AgentDecisionResponse, dependencies=[Depends(authenticated)])
 def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionResponse:
-    """Turn an LLM recommendation into an approval request without executing it."""
     trace_id = str(request.context.get("trace_id") or request.context.get("event_id") or uuid4())
     if len(trace_id) > 36:
         raise HTTPException(status_code=400, detail="trace_id must be at most 36 characters")
@@ -181,8 +178,11 @@ def create_agent_decision(request: AgentDecisionRequest) -> AgentDecisionRespons
 def create_approval(request: ApprovalCreateRequest) -> ApprovalRequest:
     if request.action not in ALLOWED_MUTATING_ACTIONS:
         raise HTTPException(status_code=400, detail="Unsupported approval action")
+    approval_id = str(uuid4())
+    trace_id = request.trace_id or approval_id
     approval = ApprovalRequest(
-        trace_id=request.trace_id or str(uuid4()),
+        approval_id=approval_id,
+        trace_id=trace_id,
         action=request.action,
         reason=request.reason,
         execution_plan=request.execution_plan,
@@ -306,7 +306,13 @@ def list_audit_events(
 
 @app.get("/api/v1/audit/traces/{trace_id}", response_model=list[AuditEvent], dependencies=[Depends(authenticated)])
 def get_trace(trace_id: str) -> list[AuditEvent]:
-    return audit_store.list(trace_id=trace_id)
+    events = audit_store.list(trace_id=trace_id)
+    if events:
+        return events
+    approval = approval_store.get(trace_id)
+    if approval is not None and approval.trace_id != trace_id:
+        return audit_store.list(trace_id=approval.trace_id)
+    return events
 
 
 @app.get("/api/v1/audit/stats", dependencies=[Depends(authenticated)])
