@@ -22,7 +22,7 @@ ADVISORY_LOCK_KEY = 918273645
 
 
 class PostgresAdvisoryLock:
-    """Session-level PostgreSQL advisory lock used for single-worker ownership."""
+    """Session-level PostgreSQL advisory lock used for single-cycle ownership."""
 
     def __init__(self, engine, key: int = ADVISORY_LOCK_KEY) -> None:
         self.engine = engine
@@ -103,6 +103,8 @@ class ReconciliationWorker:
         except Exception:
             RECONCILIATION_RUNS_TOTAL.labels(status="failed").inc()
             raise
+        finally:
+            self.lock.release()
 
     def run_forever(self) -> None:
         """Run the reconciliation loop until the process receives a shutdown signal."""
@@ -120,7 +122,7 @@ def build_worker() -> ReconciliationWorker:
     )
     batch_size = int(os.getenv("AI_RECONCILIATION_BATCH_SIZE", str(DEFAULT_BATCH_SIZE)))
     store = ApprovalStore()
-    service = ReconciliationService(store, KubernetesExecutor(), _build_audit_service(store))
+    service = ReconciliationService(store, KubernetesExecutor(), _build_audit_service())
     return ReconciliationWorker(
         store=store,
         service=service,
@@ -130,12 +132,11 @@ def build_worker() -> ReconciliationWorker:
     )
 
 
-def _build_audit_service(store: ApprovalStore):
+def _build_audit_service():
     """Build the same PostgreSQL audit backend used by the API."""
     from ai_engineering.services.audit_service import AuditService
     from ai_engineering.storage.audit_store import AuditStore
 
-    del store
     return AuditService(AuditStore())
 
 
