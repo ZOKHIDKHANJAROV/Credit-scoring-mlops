@@ -45,6 +45,32 @@ def test_completed_is_terminal() -> None:
         store.mark_executing(request.approval_id)
 
 
+def test_terminal_completion_is_idempotent() -> None:
+    store = ApprovalStore()
+    request = make_approved(store)
+
+    store.mark_executing(request.approval_id)
+    first = store.mark_completed(request.approval_id, {"executed": True, "attempt": 1})
+    second = store.mark_completed(request.approval_id, {"executed": True, "attempt": 2})
+
+    assert first.status == ApprovalStatus.COMPLETED
+    assert second.status == ApprovalStatus.COMPLETED
+    assert second.execution_result == {"executed": True, "attempt": 1}
+
+
+def test_terminal_failure_is_idempotent() -> None:
+    store = ApprovalStore()
+    request = make_approved(store)
+
+    store.mark_executing(request.approval_id)
+    first = store.mark_failed(request.approval_id, {"executed": False, "attempt": 1})
+    second = store.mark_failed(request.approval_id, {"executed": False, "attempt": 2})
+
+    assert first.status == ApprovalStatus.FAILED
+    assert second.status == ApprovalStatus.FAILED
+    assert second.execution_result == {"executed": False, "attempt": 1}
+
+
 def test_concurrent_execution_allows_only_one_transition() -> None:
     store = ApprovalStore()
     request = make_approved(store)
