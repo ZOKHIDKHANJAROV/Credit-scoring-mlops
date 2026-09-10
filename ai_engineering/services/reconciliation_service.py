@@ -28,11 +28,13 @@ class ReconciliationService:
         self.store = store
         self.executor = executor
         self.audit_service = audit_service
-        self.execution_lease_seconds = execution_lease_seconds or int(
-            os.getenv("AI_EXECUTION_LEASE_SECONDS", str(DEFAULT_EXECUTION_LEASE_SECONDS))
-        )
-        if self.execution_lease_seconds < 1:
+        if execution_lease_seconds is None:
+            execution_lease_seconds = int(
+                os.getenv("AI_EXECUTION_LEASE_SECONDS", str(DEFAULT_EXECUTION_LEASE_SECONDS))
+            )
+        if execution_lease_seconds < 1:
             raise ValueError("execution_lease_seconds must be positive")
+        self.execution_lease_seconds = execution_lease_seconds
 
     def reconcile(self, approval_id: str) -> ApprovalRequest:
         approval = self.store.get(approval_id)
