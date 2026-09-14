@@ -33,16 +33,19 @@ class PostgresAdvisoryLock:
         if self._connection is not None:
             return True
         connection = self.engine.connect()
-        acquired = bool(
-            connection.execute(
-                text("SELECT pg_try_advisory_lock(:key)"), {"key": self.key}
-            ).scalar()
-        )
-        if acquired:
-            self._connection = connection
-            return True
-        connection.close()
-        return False
+        try:
+            acquired = bool(
+                connection.execute(
+                    text("SELECT pg_try_advisory_lock(:key)"), {"key": self.key}
+                ).scalar()
+            )
+            if acquired:
+                self._connection = connection
+                return True
+            return False
+        finally:
+            if self._connection is not connection:
+                connection.close()
 
     def release(self) -> None:
         if self._connection is None:
