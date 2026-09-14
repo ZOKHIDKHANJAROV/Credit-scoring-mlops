@@ -57,6 +57,11 @@ EXECUTION_DURATION_SECONDS = Histogram(
     ("action",),
     buckets=(0.1, 0.5, 1, 2, 5, 10, 30, 60, 120),
 )
+RECONCILIATION_RUNS_TOTAL = Counter(
+    "reconciliation_runs_total",
+    "Total automatic reconciliation cycles and item failures.",
+    ("status",),
+)
 
 
 def metrics_response() -> tuple[bytes, str]:

@@ -124,6 +124,23 @@ class ApprovalStore:
             ).all()
             return [row.to_schema() for row in rows]
 
+    def list_reconcilable(self, limit: int = 100) -> list[ApprovalRequest]:
+        """Return uncertain executions that should be checked by the reconciler."""
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        with Session(self.engine) as session:
+            rows = session.scalars(
+                select(ApprovalRequestRow)
+                .where(
+                    ApprovalRequestRow.status.in_(
+                        [ApprovalStatus.UNKNOWN.value, ApprovalStatus.EXECUTING.value]
+                    )
+                )
+                .order_by(ApprovalRequestRow.requested_at.asc())
+                .limit(limit)
+            ).all()
+            return [row.to_schema() for row in rows]
+
     def _sync_request(self, request: ApprovalRequest, updated: ApprovalRequest) -> ApprovalRequest:
         request.trace_id = updated.trace_id
         request.status = updated.status
