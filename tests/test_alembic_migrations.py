@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from alembic import command
@@ -5,10 +6,11 @@ from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
 
-def test_alembic_upgrade_head_creates_current_schema(monkeypatch, tmp_path):
-    database_url = monkeypatch.getenv("AI_AUDIT_DATABASE_URL")
-    if not database_url:
-        database_url = "postgresql+pg8000://mlflow:mlflow@127.0.0.1:55432/mlflow"
+def test_alembic_upgrade_head_creates_current_schema():
+    database_url = os.getenv(
+        "AI_AUDIT_DATABASE_URL",
+        "postgresql+pg8000://mlflow:mlflow@127.0.0.1:55432/mlflow",
+    )
 
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", database_url)
@@ -18,10 +20,8 @@ def test_alembic_upgrade_head_creates_current_schema(monkeypatch, tmp_path):
     engine = create_engine(database_url)
     try:
         inspector = inspect(engine)
-        approvals = set(inspector.get_columns("ai_engineering_approvals"))
-        audit_events = set(inspector.get_columns("ai_engineering_audit_events"))
-        approval_names = {column["name"] for column in approvals}
-        audit_names = {column["name"] for column in audit_events}
+        approval_names = {column["name"] for column in inspector.get_columns("ai_engineering_approvals")}
+        audit_names = {column["name"] for column in inspector.get_columns("ai_engineering_audit_events")}
 
         assert {"approval_id", "trace_id", "execution_started_at", "status"} <= approval_names
         assert {"event_id", "trace_id", "event_type", "payload"} <= audit_names
