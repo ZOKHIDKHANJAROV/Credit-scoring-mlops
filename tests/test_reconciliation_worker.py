@@ -28,10 +28,14 @@ class FakeLock:
     def __init__(self, acquired=True):
         self.acquired = acquired
         self.calls = 0
+        self.releases = 0
 
     def try_acquire(self):
         self.calls += 1
         return self.acquired
+
+    def release(self):
+        self.releases += 1
 
 
 def approval(approval_id):
@@ -49,6 +53,7 @@ def test_run_once_reconciles_bounded_batch():
     assert processed == 2
     assert service.calls == ["a", "b"]
     assert lock.calls == 1
+    assert lock.releases == 1
 
 
 def test_run_once_skips_when_another_worker_holds_lease():
@@ -60,15 +65,32 @@ def test_run_once_skips_when_another_worker_holds_lease():
     assert worker.run_once() == 0
     assert service.calls == []
     assert lock.calls == 1
+    assert lock.releases == 0
 
 
 def test_run_once_continues_after_item_failure():
     store = FakeStore([approval("a"), approval("b")])
     service = FakeService(failures={"a"})
-    worker = ReconciliationWorker(store, service, FakeLock())
+    lock = FakeLock()
+    worker = ReconciliationWorker(store, service, lock)
 
     assert worker.run_once() == 1
     assert service.calls == ["a", "b"]
+    assert lock.releases == 1
+
+
+def test_run_once_releases_lock_when_batch_loading_fails():
+    class FailingStore(FakeStore):
+        def list_reconcilable(self, limit=100):
+            raise RuntimeError("database unavailable")
+
+    lock = FakeLock()
+    worker = ReconciliationWorker(FailingStore([]), FakeService(), lock)
+
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        worker.run_once()
+
+    assert lock.releases == 1
 
 
 def test_worker_rejects_invalid_configuration():
