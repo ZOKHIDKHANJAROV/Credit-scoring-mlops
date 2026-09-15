@@ -7,7 +7,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Integer, String, Text, create_engine, delete, select
+from sqlalchemy import JSON, DateTime, Integer, String, Text, create_engine, delete, func, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from ai_engineering.schemas.approvals import ApprovalDecision, ApprovalRequest, ApprovalStatus
@@ -123,6 +123,29 @@ class ApprovalStore:
                 .order_by(ApprovalRequestRow.requested_at.asc())
             ).all()
             return [row.to_schema() for row in rows]
+
+    def list_recent(self, limit: int = 20) -> list[ApprovalRequest]:
+        """Return recent approvals for command-center views."""
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        with Session(self.engine) as session:
+            rows = session.scalars(
+                select(ApprovalRequestRow)
+                .order_by(ApprovalRequestRow.requested_at.desc())
+                .limit(limit)
+            ).all()
+            return [row.to_schema() for row in rows]
+
+    def status_counts(self) -> dict[str, int]:
+        """Return approval counts grouped by state, including states with zero rows."""
+        with Session(self.engine) as session:
+            rows = session.execute(
+                select(ApprovalRequestRow.status, func.count(ApprovalRequestRow.id))
+                .group_by(ApprovalRequestRow.status)
+            ).all()
+        counts = {status.value: 0 for status in ApprovalStatus}
+        counts.update({str(status): int(count) for status, count in rows})
+        return counts
 
     def list_reconcilable(self, limit: int = 100) -> list[ApprovalRequest]:
         """Return uncertain executions that should be checked by the reconciler."""
