@@ -70,6 +70,15 @@ class ApprovalCreateRequest(BaseModel):
     trace_id: str | None = Field(default=None, min_length=1, max_length=36)
 
 
+class CommandCenterOverview(BaseModel):
+    approval_counts: dict[str, int]
+    audit_event_counts: dict[str, int]
+    pending_approvals: list[ApprovalRequest]
+    reconcilable_approvals: list[ApprovalRequest]
+    recent_approvals: list[ApprovalRequest]
+    recent_audit_events: list[AuditEvent]
+
+
 def authenticated(authorization: str | None = Header(default=None)) -> None:
     """Dependency used on every non-health API endpoint."""
     api_auth.require(authorization)
@@ -318,5 +327,21 @@ def get_trace(trace_id: str) -> list[AuditEvent]:
 
 
 @app.get("/api/v1/audit/stats", dependencies=[Depends(authenticated)])
-def audit_stats() -> dict[str, int]:
-    return {"event_count": audit_store.count()}
+def audit_stats() -> dict[str, int | dict[str, int]]:
+    return {"event_count": audit_store.count(), "event_counts": audit_store.event_counts()}
+
+
+@app.get("/api/v1/command-center/overview", response_model=CommandCenterOverview, dependencies=[Depends(authenticated)])
+def command_center_overview(
+    approval_limit: int = Query(default=20, ge=1, le=100),
+    audit_limit: int = Query(default=20, ge=1, le=100),
+) -> CommandCenterOverview:
+    """Return one read-only snapshot for the Command Center dashboard."""
+    return CommandCenterOverview(
+        approval_counts=approval_store.status_counts(),
+        audit_event_counts=audit_store.event_counts(),
+        pending_approvals=approval_store.list_pending()[:approval_limit],
+        reconcilable_approvals=approval_store.list_reconcilable(limit=approval_limit),
+        recent_approvals=approval_store.list_recent(limit=approval_limit),
+        recent_audit_events=audit_store.list(limit=audit_limit),
+    )
