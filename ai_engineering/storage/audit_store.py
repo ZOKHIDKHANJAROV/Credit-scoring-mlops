@@ -109,6 +109,17 @@ class AuditStore:
         with Session(self.engine) as session:
             return int(session.scalar(select(func.count()).select_from(AuditEventRow)) or 0)
 
+    def event_counts(self) -> dict[str, int]:
+        """Return audit event counts grouped by event type."""
+        with Session(self.engine) as session:
+            rows = session.execute(
+                select(AuditEventRow.event_type, func.count(AuditEventRow.id))
+                .group_by(AuditEventRow.event_type)
+            ).all()
+        counts = {event_type.value: 0 for event_type in AuditEventType}
+        counts.update({str(event_type): int(count) for event_type, count in rows})
+        return counts
+
     def clear(self) -> None:
         with Session(self.engine) as session:
             session.query(AuditEventRow).delete()
