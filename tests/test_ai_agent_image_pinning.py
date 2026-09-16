@@ -1,0 +1,26 @@
+from pathlib import Path
+import re
+
+
+IMAGE_PATTERN = re.compile(
+    r"ghcr\.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-[0-9a-f]{7,40}"
+)
+
+
+def _image_references(path: str) -> list[str]:
+    content = (Path(__file__).resolve().parents[1] / path).read_text(encoding="utf-8")
+    return re.findall(r"image:\s*(\S+)", content)
+
+
+def test_ai_agent_deployment_uses_immutable_sha_image():
+    images = _image_references("k8s/agents/ai-agent-deployment.yaml")
+    assert images
+    assert all(IMAGE_PATTERN.fullmatch(image) for image in images if "credit-scoring-mlops-agent" in image)
+
+
+def test_reconciliation_worker_uses_immutable_sha_image():
+    images = _image_references("k8s/agents/ai-reconciliation-worker.yaml")
+    agent_images = [image for image in images if "credit-scoring-mlops-agent" in image]
+    assert agent_images
+    assert all(IMAGE_PATTERN.fullmatch(image) for image in agent_images)
+    assert "latest" not in agent_images
