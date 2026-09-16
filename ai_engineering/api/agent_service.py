@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from ai_engineering.agents.orchestrator import OrchestratorAgent
@@ -31,6 +33,11 @@ from ai_engineering.tools.kubernetes_executor import KubernetesExecutionUnknown,
 ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 
 app = FastAPI(title="AI Engineering Command Center Agent", version="0.8.0")
+app.mount(
+    "/command-center",
+    StaticFiles(directory=Path(__file__).resolve().parents[1] / "dashboard", html=True),
+    name="command-center",
+)
 approval_store = ApprovalStore()
 audit_store = AuditStore()
 audit_service = AuditService(audit_store)
