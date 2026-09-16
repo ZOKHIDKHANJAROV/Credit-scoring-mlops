@@ -35,7 +35,7 @@ ALLOWED_MUTATING_ACTIONS = frozenset({"create_training_job"})
 app = FastAPI(title="AI Engineering Command Center Agent", version="0.8.0")
 app.mount(
     "/command-center",
-    StaticFiles(directory=Path(__file__).resolve().parent / "static", html=True),
+    StaticFiles(directory=Path(__file__).resolve().parents[1] / "dashboard", html=True),
     name="command-center",
 )
 approval_store = ApprovalStore()
