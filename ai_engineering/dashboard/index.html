@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Engineering Command Center</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e8edf5;background:#0b1020}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#17213b 0,#0b1020 45%);min-height:100vh}.shell{max-width:1400px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:24px}.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8fa4c7}.title{font-size:32px;font-weight:700;margin:6px 0}.sub{color:#91a0b9}.controls{display:flex;gap:8px;flex-wrap:wrap}input,button{border:1px solid #34415d;border-radius:8px;background:#11192d;color:#e8edf5;padding:10px 12px}input{min-width:280px}button{cursor:pointer}button:hover{background:#18233d}.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:20px}.card,.panel{background:rgba(17,25,45,.88);border:1px solid #283550;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18)}.card{padding:16px}.label{font-size:12px;color:#8797b4;text-transform:uppercase}.value{font-size:28px;font-weight:700;margin-top:8px}.pending .value{color:#f0c36b}.unknown .value{color:#e58b8b}.ok .value{color:#78d4a1}.panel{padding:18px;margin-bottom:20px}.panel h2{font-size:16px;margin:0 0 14px}.table{width:100%;border-collapse:collapse}.table th,.table td{text-align:left;padding:11px 8px;border-bottom:1px solid #26324a;font-size:13px;vertical-align:top}.table th{color:#8494b0;font-weight:600}.status{display:inline-block;padding:4px 8px;border-radius:999px;background:#1d2940;font-size:11px;text-transform:uppercase}.status.pending{color:#f0c36b}.status.unknown{color:#e58b8b}.status.completed{color:#78d4a1}.status.approved,.status.executing{color:#8fb9f2}.muted{color:#72819d}.error{color:#ef9a9a;padding:10px 0}.empty{color:#71809a;text-align:center;padding:22px}.footer{color:#65738d;font-size:12px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;word-break:break-all}@media(max-width:1000px){.grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:650px){.shell{padding:16px}.top{display:block}.grid{grid-template-columns:repeat(2,1fr)}input{min-width:0;width:100%}.controls{margin-top:14px}.table{display:block;overflow:auto}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="top">
+<div><div class="eyebrow">AI Engineering</div><div class="title">Command Center</div><div class="sub">Approvals, uncertain executions and audit activity</div></div>
+<div class="controls"><input id="api" placeholder="API URL, e.g. http://127.0.0.1:8010"><input id="token" type="password" placeholder="Bearer token"><button id="refresh">Refresh</button></div>
+</header>
+<section class="grid" id="cards"></section>
+<section class="panel"><h2>Pending approvals</h2><div id="pending"></div></section>
+<section class="panel"><h2>Reconcilable executions</h2><div id="reconcilable"></div></section>
+<section class="panel"><h2>Recent approvals</h2><div id="recent"></div></section>
+<section class="panel"><h2>Recent audit events</h2><div id="audit"></div></section>
+<div class="footer">Read-only dashboard. Mutating operations remain behind the approval API.</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);const state={api:localStorage.ccApi||location.origin,token:localStorage.ccToken||""};$('api').value=state.api;$('token').value=state.token;
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function status(v){return `<span class="status ${esc(v)}">${esc(v)}</span>`}
+function rows(items,kind){if(!items?.length)return '<div class="empty">No records</div>';return `<table class="table"><thead><tr>${kind==='audit'?'<th>Time</th><th>Event</th><th>Status</th><th>Trace</th>':'<th>Time</th><th>Action</th><th>Status</th><th>Reason</th><th>ID</th>'}</tr></thead><tbody>${items.map(x=>kind==='audit'?`<tr><td>${esc(new Date(x.occurred_at).toLocaleString())}</td><td>${esc(x.event_type)}</td><td>${status(x.status||'event')}</td><td class="mono">${esc(x.trace_id)}</td></tr>`:`<tr><td>${esc(new Date(x.requested_at).toLocaleString())}</td><td>${esc(x.action)}</td><td>${status(x.status)}</td><td>${esc(x.reason)}</td><td class="mono">${esc(x.approval_id)}</td></tr>`).join('')}</tbody></table>`}
+function render(d){const c=d.approval_counts||{};$('cards').innerHTML=[['Pending',c.pending||0,'pending'],['Approved',c.approved||0,'ok'],['Executing',c.executing||0,'ok'],['Unknown',c.unknown||0,'unknown'],['Completed',c.completed||0,'ok'],['Failed',c.failed||0,'unknown'],['Audit events',Object.values(d.audit_event_counts||{}).reduce((a,b)=>a+b,0),'']].map(x=>`<div class="card ${x[2]}"><div class="label">${x[0]}</div><div class="value">${x[1]}</div></div>`).join('');$('pending').innerHTML=rows(d.pending_approvals);$('reconcilable').innerHTML=rows(d.reconcilable_approvals);$('recent').innerHTML=rows(d.recent_approvals);$('audit').innerHTML=rows(d.recent_audit_events,'audit')}
+async function refresh(){state.api=$('api').value.replace(/\/$/,'');state.token=$('token').value;localStorage.ccApi=state.api;localStorage.ccToken=state.token;try{const r=await fetch(`${state.api}/api/v1/command-center/overview?approval_limit=20&audit_limit=20`,{headers:state.token?{Authorization:`Bearer ${state.token}`}:{}});if(!r.ok)throw new Error(`HTTP ${r.status}`);render(await r.json())}catch(e){$('cards').innerHTML=`<div class="card" style="grid-column:1/-1"><div class="error">${esc(e.message)}. Check API URL and authentication.</div></div>`}}
+$('refresh').onclick=refresh;refresh();setInterval(refresh,15000);
+</script>
+</body>
+</html>
