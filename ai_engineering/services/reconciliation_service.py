@@ -96,16 +96,18 @@ class ReconciliationService:
         if approval.status != ApprovalStatus.UNKNOWN:
             return approval
 
-        self.audit_service.record(
-            AuditEventType.EXECUTION_RECONCILIATION_STARTED,
-            trace_id=approval.trace_id,
-            action=approval.action,
-            status=approval.status.value,
-        )
-
         claimed, owns_retry = self.store.claim_retry_execution(approval_id)
         if not owns_retry:
             return claimed
+
+        # Only the caller that atomically changed UNKNOWN -> EXECUTING owns
+        # this reconciliation attempt and may emit the started event.
+        self.audit_service.record(
+            AuditEventType.EXECUTION_RECONCILIATION_STARTED,
+            trace_id=claimed.trace_id,
+            action=claimed.action,
+            status=claimed.status.value,
+        )
 
         job_name = f"credit-training-{approval_id}"
         try:
