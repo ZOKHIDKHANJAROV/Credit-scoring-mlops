@@ -124,7 +124,7 @@ def build_worker() -> ReconciliationWorker:
         os.getenv("AI_RECONCILIATION_INTERVAL_SECONDS", str(DEFAULT_INTERVAL_SECONDS))
     )
     batch_size = int(os.getenv("AI_RECONCILIATION_BATCH_SIZE", str(DEFAULT_BATCH_SIZE)))
-    store = ApprovalStore()
+    store = ApprovalStore(auto_create=False)
     service = ReconciliationService(store, KubernetesExecutor(), _build_audit_service())
     return ReconciliationWorker(
         store=store,
@@ -140,7 +140,7 @@ def _build_audit_service():
     from ai_engineering.services.audit_service import AuditService
     from ai_engineering.storage.audit_store import AuditStore
 
-    return AuditService(AuditStore())
+    return AuditService(AuditStore(auto_create=False))
 
 
 if __name__ == "__main__":
