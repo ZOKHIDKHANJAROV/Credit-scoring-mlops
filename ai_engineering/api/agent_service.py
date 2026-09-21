@@ -38,8 +38,8 @@ app.mount(
     StaticFiles(directory=Path(__file__).resolve().parents[1] / "dashboard", html=True),
     name="command-center",
 )
-approval_store = ApprovalStore()
-audit_store = AuditStore()
+approval_store = ApprovalStore(auto_create=False)
+audit_store = AuditStore(auto_create=False)
 audit_service = AuditService(audit_store)
 kubernetes_executor = KubernetesExecutor()
 reconciliation_service = ReconciliationService(approval_store, kubernetes_executor, audit_service)
