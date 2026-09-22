@@ -5,9 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import uuid4
 
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from ai_engineering.agents.orchestrator import OrchestratorAgent
 from ai_engineering.api.security import api_auth
@@ -107,6 +111,31 @@ def build_orchestrator() -> OrchestratorAgent:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "ai-engineering-agent"}
+
+
+def database_is_ready() -> bool:
+    """Return whether PostgreSQL is reachable and migrated to the repository head."""
+    config = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    heads = set(ScriptDirectory.from_config(config).get_heads())
+    if not heads:
+        return False
+    try:
+        with approval_store.engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            revision = connection.execute(
+                text("SELECT version_num FROM alembic_version")
+            ).scalar_one_or_none()
+    except Exception:
+        return False
+    return revision in heads
+
+
+@app.get("/ready")
+def ready() -> dict[str, str]:
+    """Readiness probe: database must be reachable and migration-complete."""
+    if not database_is_ready():
+        raise HTTPException(status_code=503, detail="AI Engineering database is not ready")
+    return {"status": "ready", "service": "ai-engineering-agent"}
 
 
 @app.get("/metrics", include_in_schema=False)
