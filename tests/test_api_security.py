@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from ai_engineering.api import agent_service
 
 
-def test_health_is_public(monkeypatch):
+def test_readiness_is_public():\n    client = TestClient(agent_service.app)\n    response = client.get("/ready")\n    assert response.status_code == 200\n    assert response.json()["status"] == "ready"\n\n\ndef test_health_is_public(monkeypatch):
     monkeypatch.setenv("AI_ENGINEERING_API_TOKEN", "secret-token")
     client = TestClient(agent_service.app)
     response = client.get("/health")
