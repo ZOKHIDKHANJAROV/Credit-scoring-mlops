@@ -18,7 +18,7 @@ on:
       - ".github/workflows/ai-agent-image.yml"
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
@@ -83,3 +83,47 @@ jobs:
           file: ai_engineering/Dockerfile
           push: false
           load: false
+
+      - name: Pin Kubernetes manifests to built image
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          IMAGE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          image_tag="sha-${IMAGE_COMMIT}"
+          image="ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:${image_tag}"
+
+          for manifest in \
+            k8s/agents/ai-agent-deployment.yaml \
+            k8s/agents/ai-reconciliation-worker.yaml
+          do
+            sed -i -E "s#(credit-scoring-mlops-agent:)sha-[0-9a-f]+#\1${image_tag}#g" "${manifest}"
+          done
+
+          grep -F "${image}" \
+            k8s/agents/ai-agent-deployment.yaml \
+            k8s/agents/ai-reconciliation-worker.yaml
+
+      - name: Commit Kubernetes image provenance
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet -- \
+            k8s/agents/ai-agent-deployment.yaml \
+            k8s/agents/ai-reconciliation-worker.yaml
+          then
+            echo "Kubernetes manifests already reference the built image."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            k8s/agents/ai-agent-deployment.yaml \
+            k8s/agents/ai-reconciliation-worker.yaml
+          git commit -m "chore(k8s): sync AI agent image [skip ci]"
+          git push origin HEAD:main
