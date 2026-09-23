@@ -7,12 +7,16 @@ on:
       - feature/ai-engineering-command-center
     paths:
       - "ai_engineering/**"
+      - "migrations/**"
+      - "alembic.ini"
       - "requirements.txt"
       - "k8s/agents/**"
       - ".github/workflows/ai-agent-image.yml"
   pull_request:
     paths:
       - "ai_engineering/**"
+      - "migrations/**"
+      - "alembic.ini"
       - "requirements.txt"
       - "k8s/agents/**"
       - ".github/workflows/ai-agent-image.yml"
@@ -40,7 +44,7 @@ jobs:
 
       - name: Compile Python sources
         run: |
-          python -m compileall -q ai_engineering
+          python -m compileall -q ai_engineering migrations
 
       - name: Log in to GHCR
         if: github.event_name == 'push'
