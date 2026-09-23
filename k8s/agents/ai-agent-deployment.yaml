@@ -27,6 +27,24 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: database-migration
+          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-664c779a3d7f863dc77b4d342965b1f2dd2a23c1
+          imagePullPolicy: IfNotPresent
+          command:
+            - alembic
+            - upgrade
+            - head
+          env:
+            - name: AI_AUDIT_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-engineering-postgres
+                  key: AI_AUDIT_DATABASE_URL
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: agent
           image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-664c779a3d7f863dc77b4d342965b1f2dd2a23c1
