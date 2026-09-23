@@ -49,14 +49,15 @@ def test_image_workflow_publishes_full_commit_sha_tags():
     assert "type=sha,format=long" in workflow
 
 
-def test_image_sync_workflow_uses_build_commit_for_kubernetes():
+def test_image_workflow_syncs_manifests_from_built_commit():
     workflow = (
         Path(__file__).resolve().parents[1]
         / ".github"
         / "workflows"
-        / "sync-ai-agent-image.yml"
+        / "ai-agent-image.yml"
     ).read_text(encoding="utf-8")
 
-    assert "github.event.workflow_run.head_sha" in workflow
+    assert "github.sha" in workflow
+    assert "Pin Kubernetes manifests to built image" in workflow
     assert "git push origin HEAD:main" in workflow
     assert "[skip ci]" in workflow
