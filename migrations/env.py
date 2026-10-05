@@ -5,10 +5,12 @@ from __future__ import annotations
 import os
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, text
 
 from ai_engineering.storage.audit_store import Base as AuditBase
 from ai_engineering.storage.approval_store import Base as ApprovalBase
+
+MIGRATION_LOCK_KEY = 7_318_240_019
 
 config = context.config
 if os.getenv("AI_AUDIT_DATABASE_URL"):
@@ -37,9 +39,16 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
-        with context.begin_transaction():
-            context.run_migrations()
+        connection.execute(text("SELECT pg_advisory_lock(:lock_key)"), {"lock_key": MIGRATION_LOCK_KEY})
+        try:
+            context.configure(connection=connection, target_metadata=target_metadata)
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(
+                text("SELECT pg_advisory_unlock(:lock_key)"),
+                {"lock_key": MIGRATION_LOCK_KEY},
+            )
 
 
 if context.is_offline_mode():

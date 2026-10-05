@@ -19,6 +19,8 @@ COPY requirements.txt ./requirements.txt
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
+COPY alembic.ini ./alembic.ini
+COPY migrations ./migrations
 COPY ai_engineering ./ai_engineering
 COPY src ./src
 COPY k8s ./k8s
