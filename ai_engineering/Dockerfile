@@ -22,6 +22,8 @@ RUN pip install --upgrade pip \
 COPY ai_engineering ./ai_engineering
 COPY src ./src
 COPY k8s ./k8s
+COPY migrations ./migrations
+COPY alembic.ini ./alembic.ini
 
 EXPOSE 8010
 
