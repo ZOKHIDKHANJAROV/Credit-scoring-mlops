@@ -41,6 +41,10 @@ The project combines a classical ML production pipeline with an agentic engineer
 - Idempotent approval/execution state transitions
 - Alembic database migrations
 - FastAPI endpoints for agent, approval and audit workflows
+- migration-aware readiness endpoint (/ready)
+- immutable AI agent image provenance for Kubernetes workloads
+- migration-gated Kubernetes startup via Alembic init containers
+- automatic reconciliation worker for stale executions
 
 ---
 
@@ -564,27 +568,41 @@ The project is being developed in milestones:
 - Agent audit/tracing
 - PostgreSQL persistence foundation
 
-### Current milestone
-
-**Persistent and idempotent AI Engineering control plane**
+### Completed AI Engineering control plane
 
 - durable approval state
 - durable audit events
 - idempotent execution
-- Alembic migrations
-- stronger CI validation
-- concurrency/state-machine tests
+- atomic execution/retry ownership
+- stale execution lease recovery
+- automatic reconciliation worker
+- Command Center overview API
+- read-only Command Center dashboard
+- migration-first runtime startup
+- migration-aware /ready probe
+- Kubernetes migration gate
+- immutable AI image provenance
+- migration validation in CI
+
+### Current milestone
+
+**Production hardening and deployment correctness**
+
+- Kubernetes manifest validation
+- rollout/readiness guarantees
+- stronger operational documentation
+- release/deployment automation
+- security and failure-mode hardening
 
 ### Next milestone
 
-**Command Center UI and production hardening**
+**End-to-end production deployment**
 
-- dashboard against the final backend contracts
-- end-to-end approval flow
-- richer observability
-- security hardening
-- deployment documentation
-- release automation
+- reproducible Kubernetes deployment
+- controlled model-training execution
+- richer SLO/SLI observability
+- operational runbooks
+- release versioning
 
 ---
 
