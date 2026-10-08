@@ -55,7 +55,7 @@ spec:
           type: RuntimeDefault
       initContainers:
         - name: database-migration
-          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-2da762eb486f209389cefe878a509c50e9ddec17
+          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-0e7af08d44b71d4f10ac1060ef170cbce68da8aa
           imagePullPolicy: IfNotPresent
           command:
             - alembic
@@ -73,7 +73,7 @@ spec:
               drop: ["ALL"]
       containers:
         - name: reconciliation-worker
-          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-2da762eb486f209389cefe878a509c50e9ddec17
+          image: ghcr.io/zokhidkhanjarov/credit-scoring-mlops-agent:sha-0e7af08d44b71d4f10ac1060ef170cbce68da8aa
           imagePullPolicy: IfNotPresent
           command:
             - python
