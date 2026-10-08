@@ -45,6 +45,9 @@ def run_migrations_online() -> None:
             with context.begin_transaction():
                 context.run_migrations()
         finally:
+            # Preserve the original migration error if the transaction is aborted.
+            if connection.in_transaction():
+                connection.rollback()
             connection.execute(
                 text("SELECT pg_advisory_unlock(:lock_key)"),
                 {"lock_key": MIGRATION_LOCK_KEY},
